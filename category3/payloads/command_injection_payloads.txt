@@ -1,0 +1,17 @@
+; ls
+| ls
+& ls
+; whoami
+| whoami
+& whoami
+; id
+`id`
+$(id)
+; sleep 5
+| sleep 5
+& sleep 5
+; ping -c 5 127.0.0.1
+| ping -c 5 127.0.0.1
+%0als
+%0aid
+%0awhoami

