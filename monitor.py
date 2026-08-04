@@ -1,647 +1,827 @@
 """
-Live Security Scanner Monitor
-Real-time CPU, Memory, Network + Logs
-Auto-launched by app.py
+Security Assessment Agent v2.0
+Real-Time Monitor Dashboard
+Left: System Stats | Right: Live Logs (tail -f)
 """
 
 import os
 import sys
 import time
-import psutil
+import socket
 import threading
 from datetime import datetime
-from collections import deque
-from rich.console import Console
-from rich.layout import Layout
-from rich.panel import Panel
-from rich.table import Table
-from rich.live import Live
-from rich.text import Text
-from rich import box
 
-console = Console()
+try:
+    import psutil
+except ImportError:
+    print("pip install psutil")
+    sys.exit(1)
 
-# ── Shared log queue ─────────────────────────────
-LOG_FILE = 'monitor_logs.txt'
-MAX_LOGS = 50
-CPU_HISTORY = deque(maxlen=40)
-MEM_HISTORY = deque(maxlen=40)
-NET_SENT_PREV = [0]
-NET_RECV_PREV = [0]
-NET_SPEED_HISTORY = deque(maxlen=40)
+try:
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.layout import Layout
+    from rich.text import Text
+    from rich.console import Console
+    from rich import box
+except ImportError:
+    print("pip install rich")
+    sys.exit(1)
 
-
-# ════════════════════════════════════════════════════
-#  SPARKLINE GRAPH
-# ════════════════════════════════════════════════════
-def make_sparkline(values, width=35, max_val=100):
-    """Create ASCII sparkline graph"""
-    if not values:
-        return '─' * width
-
-    blocks = ' ▁▂▃▄▅▆▇█'
-    val_list = list(values)
-
-    # Auto-scale if max_val is 0
-    if max_val <= 0:
-        max_val = max(val_list) if val_list else 1
-        if max_val <= 0:
-            max_val = 1
-
-    normalized = []
-    for v in val_list:
-        idx = int((v / max_val) * 8)
-        idx = max(0, min(8, idx))
-        normalized.append(idx)
-
-    # Pad to width
-    while len(normalized) < width:
-        normalized.insert(0, 0)
-    normalized = normalized[-width:]
-
-    return ''.join(blocks[n] for n in normalized)
-
-
-def make_bar(value, max_val=100, width=25):
-    """Create colored progress bar"""
-    if max_val <= 0:
-        max_val = 100
-    ratio = value / max_val
-    filled = int(ratio * width)
-    filled = max(0, min(width, filled))
-    bar = '█' * filled + '░' * (width - filled)
-
-    if ratio < 0.50:
-        color = 'green'
-    elif ratio < 0.80:
-        color = 'yellow'
-    else:
-        color = 'red'
-
-    return f"[{color}]{bar}[/{color}]"
+try:
+    import requests
+except ImportError:
+    requests = None
 
 
 # ════════════════════════════════════════════════════
-#  SYSTEM STATS COLLECTOR
+#  CONFIG
+# ════════════════════════════════════════════════════
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_FILE = os.path.join(BASE_DIR, 'monitor_logs.txt')
+MAX_LOG_LINES = 200
+
+
+# ════════════════════════════════════════════════════
+#  STATS COLLECTOR
 # ════════════════════════════════════════════════════
 class StatsCollector:
-    """
-    Collects system stats in background thread.
-    Avoids blocking the UI render loop.
-    """
-
     def __init__(self):
-        self.stats = {}
-        self.lock = threading.Lock()
-        self.running = True
+        self.cpu_percent = 0.0
+        self.per_core_cpu = []
+        self.memory = None
+        self.swap = None
+        self.disk = None
+        self.net_io = None
+        self.prev_net_io = None
+        self.net_sent_speed = 0.0
+        self.net_recv_speed = 0.0
+        self.boot_time = 0
+        self.process_count = 0
+        self.scanner_cpu = 0.0
+        self.scanner_mem = 0.0
+        self.scanner_pid = os.getpid()
+        self.public_ip = 'Fetching...'
+        self.private_ip = 'Fetching...'
+        self.hostname = 'Fetching...'
 
-        # Initialize psutil cpu (first call
-        # always returns 0)
+        self.cpu_history = [0.0] * 30
+        self.mem_history = [0.0] * 30
+        self.net_send_history = [0.0] * 30
+        self.net_recv_history = [0.0] * 30
+
+        self._running = True
+        self._thread = threading.Thread(
+            target=self._collect_loop, daemon=True
+        )
+        self._thread.start()
+
+        self._ip_thread = threading.Thread(
+            target=self._fetch_ip_info, daemon=True
+        )
+        self._ip_thread.start()
+
+    def _collect_loop(self):
         psutil.cpu_percent(interval=None)
         psutil.cpu_percent(
             interval=None, percpu=True
         )
+        self.prev_net_io = psutil.net_io_counters()
+        time.sleep(0.5)
 
-        # Initialize network baseline
-        net = psutil.net_io_counters()
-        self.prev_sent = net.bytes_sent
-        self.prev_recv = net.bytes_recv
-        self.prev_time = time.time()
-
-        # Initial collect
-        self._collect()
-
-        # Start background thread
-        self.thread = threading.Thread(
-            target=self._loop, daemon=True
-        )
-        self.thread.start()
-
-    def _loop(self):
-        """Background collection loop"""
-        while self.running:
-            self._collect()
+        while self._running:
+            try:
+                self._update_stats()
+            except Exception:
+                pass
             time.sleep(1.0)
 
-    def _collect(self):
-        """Collect all system stats"""
+    def _update_stats(self):
+        self.cpu_percent = psutil.cpu_percent(
+            interval=None
+        )
+        self.per_core_cpu = psutil.cpu_percent(
+            interval=None, percpu=True
+        )
+
+        self.memory = psutil.virtual_memory()
+        self.swap = psutil.swap_memory()
+        self.disk = psutil.disk_usage('/')
+
+        current_net = psutil.net_io_counters()
+        if self.prev_net_io:
+            self.net_sent_speed = (
+                (
+                    current_net.bytes_sent
+                    - self.prev_net_io.bytes_sent
+                ) / 1024.0
+            )
+            self.net_recv_speed = (
+                (
+                    current_net.bytes_recv
+                    - self.prev_net_io.bytes_recv
+                ) / 1024.0
+            )
+        self.prev_net_io = current_net
+        self.net_io = current_net
+
+        self.boot_time = psutil.boot_time()
+        self.process_count = len(psutil.pids())
+
         try:
-            # CPU - non-blocking
-            cpu_pct = psutil.cpu_percent(
+            proc = psutil.Process(self.scanner_pid)
+            self.scanner_cpu = proc.cpu_percent(
                 interval=None
             )
-            cpu_cores = psutil.cpu_percent(
-                interval=None, percpu=True
+            self.scanner_mem = (
+                proc.memory_info().rss / 1024 / 1024
             )
-            cpu_freq = psutil.cpu_freq()
-            cpu_count = psutil.cpu_count()
-
-            # Memory
-            mem = psutil.virtual_memory()
-            swap = psutil.swap_memory()
-
-            # Network speed calculation
-            net = psutil.net_io_counters()
-            now = time.time()
-            dt = now - self.prev_time
-            if dt > 0:
-                send_speed = (
-                    (net.bytes_sent - self.prev_sent)
-                    / dt / 1024
-                )  # KB/s
-                recv_speed = (
-                    (net.bytes_recv - self.prev_recv)
-                    / dt / 1024
-                )  # KB/s
-            else:
-                send_speed = 0
-                recv_speed = 0
-
-            self.prev_sent = net.bytes_sent
-            self.prev_recv = net.bytes_recv
-            self.prev_time = now
-
-            # Connections
-            try:
-                net_conns = len(
-                    psutil.net_connections()
-                )
-            except (
-                psutil.AccessDenied,
-                PermissionError
-            ):
-                net_conns = 0
-
-            # Disk
-            disk = psutil.disk_usage('/')
-
-            # Current process
-            try:
-                proc = psutil.Process(os.getpid())
-                proc_cpu = proc.cpu_percent()
-                proc_mem = (
-                    proc.memory_info().rss
-                    / 1024 / 1024
-                )
-            except Exception:
-                proc_cpu = 0
-                proc_mem = 0
-
-            with self.lock:
-                self.stats = {
-                    'cpu_percent': cpu_pct,
-                    'cpu_per_core': cpu_cores,
-                    'cpu_freq': (
-                        cpu_freq.current
-                        if cpu_freq else 0
-                    ),
-                    'cpu_count': cpu_count or 0,
-                    'mem_percent': mem.percent,
-                    'mem_used': (
-                        mem.used / 1024**3
-                    ),
-                    'mem_total': (
-                        mem.total / 1024**3
-                    ),
-                    'mem_available': (
-                        mem.available / 1024**3
-                    ),
-                    'swap_percent': swap.percent,
-                    'net_sent_total': (
-                        net.bytes_sent / 1024**2
-                    ),
-                    'net_recv_total': (
-                        net.bytes_recv / 1024**2
-                    ),
-                    'net_send_speed': send_speed,
-                    'net_recv_speed': recv_speed,
-                    'net_connections': net_conns,
-                    'disk_percent': disk.percent,
-                    'disk_used': (
-                        disk.used / 1024**3
-                    ),
-                    'disk_total': (
-                        disk.total / 1024**3
-                    ),
-                    'proc_cpu': proc_cpu,
-                    'proc_mem': proc_mem,
-                }
-
         except Exception:
-            pass
+            self.scanner_cpu = 0.0
+            self.scanner_mem = 0.0
 
-    def get(self):
-        """Get latest stats (thread-safe)"""
-        with self.lock:
-            return self.stats.copy()
+        self.cpu_history.append(self.cpu_percent)
+        self.cpu_history = self.cpu_history[-30:]
+
+        if self.memory:
+            self.mem_history.append(
+                self.memory.percent
+            )
+            self.mem_history = self.mem_history[-30:]
+
+        self.net_send_history.append(
+            self.net_sent_speed
+        )
+        self.net_send_history = (
+            self.net_send_history[-30:]
+        )
+        self.net_recv_history.append(
+            self.net_recv_speed
+        )
+        self.net_recv_history = (
+            self.net_recv_history[-30:]
+        )
+
+    def _fetch_ip_info(self):
+        try:
+            s = socket.socket(
+                socket.AF_INET, socket.SOCK_DGRAM
+            )
+            s.connect(('8.8.8.8', 80))
+            self.private_ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            self.private_ip = '?.?.?.?'
+
+        try:
+            self.hostname = socket.gethostname()
+        except Exception:
+            self.hostname = 'unknown'
+
+        if requests:
+            for service in [
+                'https://api.ipify.org',
+                'https://ifconfig.me/ip',
+                'https://icanhazip.com',
+                'https://checkip.amazonaws.com',
+            ]:
+                try:
+                    r = requests.get(
+                        service, timeout=5
+                    )
+                    if r.status_code == 200:
+                        self.public_ip = (
+                            r.text.strip()
+                        )
+                        break
+                except Exception:
+                    continue
+            else:
+                self.public_ip = 'Unavailable'
+        else:
+            self.public_ip = 'N/A'
 
     def stop(self):
-        self.running = False
+        self._running = False
+
+
+# ════════════════════════════════════════════════════
+#  SPARKLINE
+# ════════════════════════════════════════════════════
+def make_sparkline(values, width=25, color='green'):
+    if not values or all(v == 0 for v in values):
+        return Text('▁' * width, style=f'dim {color}')
+
+    max_val = max(values) or 1
+    blocks = '▁▂▃▄▅▆▇█'
+
+    data = values[-width:]
+    if len(data) < width:
+        data = [0.0] * (width - len(data)) + data
+
+    chars = []
+    for v in data:
+        idx = min(7, max(0, int((v / max_val) * 7)))
+        chars.append(blocks[idx])
+
+    return Text(''.join(chars), style=color)
+
+
+# ════════════════════════════════════════════════════
+#  PROGRESS BAR
+# ════════════════════════════════════════════════════
+def make_bar(percent, width=20):
+    filled = int((percent / 100) * width)
+    empty = width - filled
+
+    if percent >= 80:
+        color = 'red'
+    elif percent >= 50:
+        color = 'yellow'
+    else:
+        color = 'green'
+
+    bar = '█' * filled + '░' * empty
+    return Text(
+        f'[{bar}] {percent:.1f}%', style=color
+    )
 
 
 # ════════════════════════════════════════════════════
 #  LOG READER
 # ════════════════════════════════════════════════════
 def read_logs():
-    """Read latest logs from shared file"""
-    logs = []
     try:
-        if os.path.exists(LOG_FILE):
-            with open(
-                LOG_FILE, 'r', encoding='utf-8'
-            ) as f:
-                lines = f.readlines()
-                logs = lines[-MAX_LOGS:]
+        if not os.path.exists(LOG_FILE):
+            return ['Waiting for scan to start...']
+
+        with open(
+            LOG_FILE, 'r', encoding='utf-8',
+            errors='ignore'
+        ) as f:
+            lines = f.readlines()
+
+        cleaned = [
+            l.rstrip('\n\r')
+            for l in lines
+            if l.strip()
+        ]
+
+        return cleaned[-MAX_LOG_LINES:]
+
+    except PermissionError:
+        return ['Log file locked...']
+    except Exception as e:
+        return [f'Log error: {e}']
+
+
+# ════════════════════════════════════════════════════
+#  LOG COLORIZER
+# ════════════════════════════════════════════════════
+def colorize_log_line(line):
+    text = Text()
+
+    parts = line.split(' ', 2)
+    if len(parts) >= 2:
+        timestamp = parts[0]
+        level_and_msg = ' '.join(parts[1:])
+    else:
+        timestamp = ''
+        level_and_msg = line
+
+    if timestamp:
+        text.append(
+            timestamp + ' ', style='dim cyan'
+        )
+
+    if '[CRITICAL]' in line:
+        text.append(
+            level_and_msg,
+            style='bold red on dark_red'
+        )
+    elif '[ERROR]' in line:
+        text.append(
+            level_and_msg, style='bold red'
+        )
+    elif '[BLOCK]' in line:
+        text.append(
+            level_and_msg, style='bold red'
+        )
+    elif '[ROTATE]' in line:
+        text.append(
+            level_and_msg,
+            style='bold yellow on dark_red'
+        )
+    elif '[WARN]' in line:
+        text.append(
+            level_and_msg, style='yellow'
+        )
+    elif '[OK]' in line or '[SUCCESS]' in line:
+        text.append(
+            level_and_msg, style='green'
+        )
+    elif '[SCAN]' in line:
+        text.append(
+            level_and_msg, style='bold cyan'
+        )
+    elif '[AGENT]' in line:
+        text.append(
+            level_and_msg, style='magenta'
+        )
+    elif '[CONN]' in line:
+        text.append(
+            level_and_msg, style='blue'
+        )
+    elif '[SEC]' in line:
+        text.append(
+            level_and_msg, style='bold yellow'
+        )
+    elif '[GUARD]' in line:
+        text.append(
+            level_and_msg, style='cyan'
+        )
+    elif line.startswith('#'):
+        text.append(
+            level_and_msg, style='dim white'
+        )
+    else:
+        text.append(
+            level_and_msg, style='white'
+        )
+
+    return text
+
+
+# ════════════════════════════════════════════════════
+#  LEFT PANEL — SYSTEM STATS
+# ════════════════════════════════════════════════════
+def build_left_panel(stats):
+    t = Table(
+        show_header=False, box=None,
+        padding=(0, 1), expand=True
+    )
+    t.add_column('l', style='bold white', width=14)
+    t.add_column('v', style='cyan')
+
+    # Network Identity
+    t.add_row(
+        Text('╔═ NETWORK ═╗', style='bold cyan'),
+        Text('')
+    )
+    t.add_row(
+        Text(' Hostname', style='white'),
+        Text(str(stats.hostname), style='cyan')
+    )
+    t.add_row(
+        Text(' Private IP', style='white'),
+        Text(str(stats.private_ip), style='green')
+    )
+    pub_ip = str(stats.public_ip)
+    pub_style = (
+        'red' if pub_ip in [
+            'Fetching...', 'Unavailable', 'N/A'
+        ] else 'bold yellow'
+    )
+    t.add_row(
+        Text(' Public IP', style='white'),
+        Text(pub_ip, style=pub_style)
+    )
+    t.add_row(Text(''), Text(''))
+
+    # CPU
+    t.add_row(
+        Text('╔═ CPU ═════╗', style='bold green'),
+        Text('')
+    )
+    t.add_row(
+        Text(' Overall', style='white'),
+        make_bar(stats.cpu_percent)
+    )
+    if stats.per_core_cpu:
+        for i, pct in enumerate(
+            stats.per_core_cpu
+        ):
+            t.add_row(
+                Text(
+                    f' Core {i}', style='dim white'
+                ),
+                make_bar(pct, width=12)
+            )
+    t.add_row(
+        Text(' History', style='dim white'),
+        make_sparkline(
+            stats.cpu_history, 25, 'green'
+        )
+    )
+    t.add_row(Text(''), Text(''))
+
+    # Memory
+    t.add_row(
+        Text('╔═ MEMORY ══╗', style='bold yellow'),
+        Text('')
+    )
+    if stats.memory:
+        mem = stats.memory
+        t.add_row(
+            Text(' RAM', style='white'),
+            make_bar(mem.percent)
+        )
+        t.add_row(
+            Text(' Used/Total', style='dim white'),
+            Text(
+                f'{mem.used/(1024**3):.1f}G / '
+                f'{mem.total/(1024**3):.1f}G',
+                style='white'
+            )
+        )
+        t.add_row(
+            Text(' Available', style='dim white'),
+            Text(
+                f'{mem.available/(1024**3):.1f}G',
+                style='green'
+            )
+        )
+    if stats.swap and stats.swap.total > 0:
+        t.add_row(
+            Text(' Swap', style='white'),
+            make_bar(stats.swap.percent)
+        )
+    t.add_row(
+        Text(' History', style='dim white'),
+        make_sparkline(
+            stats.mem_history, 25, 'yellow'
+        )
+    )
+    t.add_row(Text(''), Text(''))
+
+    # Disk
+    t.add_row(
+        Text('╔═ DISK ════╗', style='bold blue'),
+        Text('')
+    )
+    if stats.disk:
+        dk = stats.disk
+        t.add_row(
+            Text(' Usage', style='white'),
+            make_bar(dk.percent)
+        )
+        t.add_row(
+            Text(' Free', style='dim white'),
+            Text(
+                f'{dk.free/(1024**3):.0f}G',
+                style='green'
+            )
+        )
+    t.add_row(Text(''), Text(''))
+
+    # Network I/O
+    t.add_row(
+        Text(
+            '╔═ NETWORK IO ╗', style='bold magenta'
+        ),
+        Text('')
+    )
+
+    def fmt_speed(kb):
+        if kb >= 1024:
+            return f'{kb/1024:.1f} MB/s'
+        return f'{kb:.1f} KB/s'
+
+    send_s = stats.net_sent_speed
+    recv_s = stats.net_recv_speed
+    t.add_row(
+        Text(' ↑ Upload', style='white'),
+        Text(
+            fmt_speed(send_s),
+            style=(
+                'red' if send_s > 500
+                else 'yellow' if send_s > 100
+                else 'green'
+            )
+        )
+    )
+    t.add_row(
+        Text(' ↓ Download', style='white'),
+        Text(
+            fmt_speed(recv_s),
+            style=(
+                'red' if recv_s > 500
+                else 'yellow' if recv_s > 100
+                else 'green'
+            )
+        )
+    )
+    t.add_row(
+        Text(' ↑ History', style='dim white'),
+        make_sparkline(
+            stats.net_send_history, 25, 'cyan'
+        )
+    )
+    t.add_row(
+        Text(' ↓ History', style='dim white'),
+        make_sparkline(
+            stats.net_recv_history, 25, 'magenta'
+        )
+    )
+    t.add_row(Text(''), Text(''))
+
+    # Scanner
+    t.add_row(
+        Text('╔═ SCANNER ═╗', style='bold red'),
+        Text('')
+    )
+    t.add_row(
+        Text(' PID', style='white'),
+        Text(str(stats.scanner_pid), style='cyan')
+    )
+    t.add_row(
+        Text(' CPU', style='white'),
+        Text(
+            f'{stats.scanner_cpu:.1f}%',
+            style=(
+                'red' if stats.scanner_cpu > 50
+                else 'green'
+            )
+        )
+    )
+    t.add_row(
+        Text(' Memory', style='white'),
+        Text(
+            f'{stats.scanner_mem:.1f} MB',
+            style=(
+                'red' if stats.scanner_mem > 500
+                else 'green'
+            )
+        )
+    )
+    try:
+        up = time.time() - stats.boot_time
+        t.add_row(
+            Text(' Uptime', style='white'),
+            Text(
+                f'{int(up//3600)}h {int((up%3600)//60)}m',
+                style='dim white'
+            )
+        )
     except Exception:
         pass
-    return logs
+
+    return Panel(
+        t,
+        title='[bold cyan]⚙ System Monitor[/]',
+        border_style='cyan',
+        box=box.ROUNDED,
+        padding=(1, 1)
+    )
 
 
 # ════════════════════════════════════════════════════
-#  BUILD LAYOUT
+#  RIGHT PANEL — LIVE LOGS (tail -f)
 # ════════════════════════════════════════════════════
-def build_layout(stats, logs):
-    """Build the full monitor dashboard"""
-    if not stats:
-        return Panel(
-            "[yellow]Waiting for data...[/]",
-            title="Monitor"
-        )
+def build_right_panel():
+    """
+    tail -f style log viewer.
+    Always shows latest lines.
+    Auto-scrolls as new entries arrive.
+    """
+    logs = read_logs()
 
-    now = datetime.now().strftime(
-        '%Y-%m-%d %H:%M:%S'
-    )
+    # Calculate available display lines
+    try:
+        term_height = os.get_terminal_size().lines
+    except Exception:
+        term_height = 40
 
-    # Update histories
-    CPU_HISTORY.append(
-        stats.get('cpu_percent', 0)
-    )
-    MEM_HISTORY.append(
-        stats.get('mem_percent', 0)
-    )
-    NET_SPEED_HISTORY.append(
-        stats.get('net_recv_speed', 0)
-    )
+    available = max(10, term_height - 11)
 
-    # ── Header ───────────────────────────────────
-    header = Table.grid(expand=True)
-    header.add_column(justify='left')
-    header.add_column(justify='center')
-    header.add_column(justify='right')
-    header.add_row(
-        "[bold cyan]SEC SCANNER MONITOR v1.0[/]",
-        "[bold yellow]LIVE SYSTEM DASHBOARD[/]",
-        f"[dim]{now}[/]"
-    )
-
-    # ── CPU Panel ────────────────────────────────
-    cpu_t = Table(
-        box=None, show_header=False,
-        expand=True, padding=(0, 1)
-    )
-    cpu_t.add_column(width=14)
-    cpu_t.add_column()
-
-    cpu_pct = stats.get('cpu_percent', 0)
-    cpu_bar = make_bar(cpu_pct)
-    cpu_spark = make_sparkline(CPU_HISTORY)
-
-    cpu_t.add_row(
-        "[bold]Overall[/]",
-        f"{cpu_bar} [bold cyan]"
-        f"{cpu_pct:.1f}%[/]"
-    )
-    cpu_t.add_row(
-        "[bold]Frequency[/]",
-        f"[cyan]{stats.get('cpu_freq', 0):.0f}"
-        f" MHz[/]"
-    )
-    cpu_t.add_row(
-        "[bold]Cores[/]",
-        f"[cyan]{stats.get('cpu_count', 0)}[/]"
-    )
-    cpu_t.add_row(
-        "[bold]History[/]",
-        f"[green]{cpu_spark}[/]"
-    )
-
-    # Per-core (max 8)
-    cores = stats.get('cpu_per_core', [])
-    if cores:
-        cpu_t.add_row("", "")
-        for i, core_pct in enumerate(cores[:8]):
-            core_bar = make_bar(
-                core_pct, width=12
-            )
-            cpu_t.add_row(
-                f"  Core {i}",
-                f"{core_bar} {core_pct:.0f}%"
-            )
-
-    cpu_panel = Panel(
-        cpu_t,
-        title="[bold green]⚡ CPU[/]",
-        border_style="green",
-        padding=(0, 1)
-    )
-
-    # ── Memory Panel ─────────────────────────────
-    mem_t = Table(
-        box=None, show_header=False,
-        expand=True, padding=(0, 1)
-    )
-    mem_t.add_column(width=14)
-    mem_t.add_column()
-
-    mem_pct = stats.get('mem_percent', 0)
-    mem_bar = make_bar(mem_pct)
-    mem_spark = make_sparkline(MEM_HISTORY)
-
-    mem_t.add_row(
-        "[bold]RAM Usage[/]",
-        f"{mem_bar} [bold cyan]"
-        f"{mem_pct:.1f}%[/]"
-    )
-    mem_t.add_row(
-        "[bold]Used[/]",
-        f"[cyan]{stats.get('mem_used', 0):.2f}"
-        f" / {stats.get('mem_total', 0):.2f}"
-        f" GB[/]"
-    )
-    mem_t.add_row(
-        "[bold]Available[/]",
-        f"[green]"
-        f"{stats.get('mem_available', 0):.2f}"
-        f" GB[/]"
-    )
-    mem_t.add_row(
-        "[bold]Swap[/]",
-        f"[yellow]"
-        f"{stats.get('swap_percent', 0):.1f}%[/]"
-    )
-    mem_t.add_row(
-        "[bold]History[/]",
-        f"[blue]{mem_spark}[/]"
-    )
-
-    mem_panel = Panel(
-        mem_t,
-        title="[bold blue]🧠 MEMORY[/]",
-        border_style="blue",
-        padding=(0, 1)
-    )
-
-    # ── Network Panel ────────────────────────────
-    net_t = Table(
-        box=None, show_header=False,
-        expand=True, padding=(0, 1)
-    )
-    net_t.add_column(width=14)
-    net_t.add_column()
-
-    send_spd = stats.get('net_send_speed', 0)
-    recv_spd = stats.get('net_recv_speed', 0)
-    net_spark = make_sparkline(
-        NET_SPEED_HISTORY,
-        max_val=max(
-            max(NET_SPEED_HISTORY, default=1),
-            1
-        )
-    )
-
-    net_t.add_row(
-        "[bold]↑ Upload[/]",
-        f"[cyan]{send_spd:.1f} KB/s[/]"
-    )
-    net_t.add_row(
-        "[bold]↓ Download[/]",
-        f"[cyan]{recv_spd:.1f} KB/s[/]"
-    )
-    net_t.add_row(
-        "[bold]Total Sent[/]",
-        f"[dim]{stats.get('net_sent_total', 0):.1f}"
-        f" MB[/]"
-    )
-    net_t.add_row(
-        "[bold]Total Recv[/]",
-        f"[dim]{stats.get('net_recv_total', 0):.1f}"
-        f" MB[/]"
-    )
-    net_t.add_row(
-        "[bold]Connections[/]",
-        f"[yellow]"
-        f"{stats.get('net_connections', 0)}[/]"
-    )
-    net_t.add_row(
-        "[bold]Net History[/]",
-        f"[magenta]{net_spark}[/]"
-    )
-    net_t.add_row("", "")
-    net_t.add_row(
-        "[bold]Disk[/]",
-        f"[cyan]"
-        f"{stats.get('disk_percent', 0):.1f}% "
-        f"({stats.get('disk_used', 0):.1f}/"
-        f"{stats.get('disk_total', 0):.1f} GB)[/]"
-    )
-    disk_bar = make_bar(
-        stats.get('disk_percent', 0),
-        width=20
-    )
-    net_t.add_row("", disk_bar)
-    net_t.add_row("", "")
-    net_t.add_row(
-        "[bold]Scanner CPU[/]",
-        f"[magenta]"
-        f"{stats.get('proc_cpu', 0):.1f}%[/]"
-    )
-    net_t.add_row(
-        "[bold]Scanner RAM[/]",
-        f"[magenta]"
-        f"{stats.get('proc_mem', 0):.1f} MB[/]"
-    )
-
-    net_panel = Panel(
-        net_t,
-        title="[bold yellow]🌐 NETWORK & DISK[/]",
-        border_style="yellow",
-        padding=(0, 1)
-    )
-
-    # ── Log Panel ────────────────────────────────
     log_text = Text()
-    log_colors = {
-        '[✓]': 'green',
-        '[!]': 'red bold',
-        '[*]': 'cyan',
-        '[⚠]': 'yellow',
-        'ERROR': 'red bold',
-        'FOUND': 'red bold',
-        'CRITICAL': 'red bold',
-        'HIGH': 'red',
-        'MEDIUM': 'yellow',
-        'COMPLETE': 'green bold',
-        'complete': 'green',
-        'Started': 'cyan bold',
-        '══': 'cyan bold',
-    }
 
-    recent_logs = logs[-20:]
-    if not recent_logs:
+    if not logs or logs == [
+        'Waiting for scan to start...'
+    ]:
         log_text.append(
-            "  Waiting for scanner logs...\n",
-            style="dim"
+            '\n  ⏳ Waiting for scan...\n',
+            style='dim yellow'
+        )
+        log_text.append(
+            '  Run: python app.py\n',
+            style='dim white'
+        )
+        log_text.append(
+            '  Logs follow here (tail -f)\n',
+            style='dim cyan'
         )
     else:
-        for log in recent_logs:
-            log = log.strip()
-            if not log:
-                continue
+        # ✅ tail -f: Always last N lines
+        tail = logs[-available:]
 
-            color = 'white'
-            for keyword, col in log_colors.items():
-                if keyword in log:
-                    color = col
-                    break
-
-            log_text.append(
-                f"  {log}\n", style=color
+        for i, line in enumerate(tail):
+            line_num = (
+                len(logs) - len(tail) + i + 1
             )
+            log_text.append(
+                f'{line_num:>4} ',
+                style='dim white'
+            )
+            log_text.append_text(
+                colorize_log_line(line)
+            )
+            log_text.append('\n')
 
-    log_panel = Panel(
+        # Blinking cursor = "live" indicator
+        log_text.append(
+            f'{"":>4} ', style='dim white'
+        )
+        log_text.append('█', style='bold green')
+
+    # Stats for subtitle
+    total = len(logs)
+    showing = min(available, total)
+    errors = sum(
+        1 for l in logs
+        if '[ERROR]' in l or '[CRITICAL]' in l
+    )
+    warns = sum(
+        1 for l in logs if '[WARN]' in l
+    )
+    blocks = sum(
+        1 for l in logs
+        if '[BLOCK]' in l or '[ROTATE]' in l
+    )
+
+    parts = [f'tail -f', f'{showing}/{total}']
+    if errors:
+        parts.append(f'[red]{errors} err[/]')
+    if warns:
+        parts.append(f'[yellow]{warns} warn[/]')
+    if blocks:
+        parts.append(f'[red]{blocks} block[/]')
+
+    return Panel(
         log_text,
-        title="[bold magenta]📋 LIVE SCANNER LOGS[/]",
-        border_style="magenta",
-        padding=(0, 0)
+        title='[bold green]📋 Live Logs[/]',
+        subtitle=f'[dim]{" │ ".join(parts)}[/]',
+        border_style='green',
+        box=box.ROUNDED,
+        padding=(0, 1)
     )
 
-    # ── Status Bar ───────────────────────────────
-    status_parts = []
 
-    cpu_pct = stats.get('cpu_percent', 0)
-    if cpu_pct < 50:
-        status_parts.append(
-            "[green]● CPU: Normal[/]"
-        )
-    elif cpu_pct < 80:
-        status_parts.append(
-            "[yellow]● CPU: High[/]"
-        )
+# ════════════════════════════════════════════════════
+#  HEADER
+# ════════════════════════════════════════════════════
+def build_header():
+    h = Text()
+    h.append(
+        '  ⚡ Security Assessment Agent ',
+        style='bold cyan'
+    )
+    h.append('v2.0 ', style='bold white')
+    h.append('│ ', style='dim white')
+    h.append('Monitor ', style='bold green')
+    h.append('│ ', style='dim white')
+    h.append(
+        datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        style='dim cyan'
+    )
+    h.append(' │ ', style='dim white')
+    h.append('Ctrl+C exit', style='dim red')
+
+    return Panel(
+        h, border_style='cyan',
+        box=box.HEAVY, padding=(0, 0)
+    )
+
+
+# ════════════════════════════════════════════════════
+#  STATUS BAR
+# ════════════════════════════════════════════════════
+def build_status_bar(stats):
+    now = datetime.now().strftime('%H:%M:%S')
+    cpu = stats.cpu_percent
+    mem = stats.memory.percent if stats.memory else 0
+
+    if cpu > 90 or mem > 90:
+        health = '🔴 CRITICAL'
+        hs = 'bold red'
+    elif cpu > 70 or mem > 70:
+        health = '🟡 WARNING'
+        hs = 'bold yellow'
     else:
-        status_parts.append(
-            "[red]● CPU: Critical![/]"
-        )
+        health = '🟢 HEALTHY'
+        hs = 'bold green'
 
-    mem_pct = stats.get('mem_percent', 0)
-    if mem_pct < 70:
-        status_parts.append(
-            "[green]● RAM: OK[/]"
-        )
-    elif mem_pct < 90:
-        status_parts.append(
-            "[yellow]● RAM: High[/]"
-        )
-    else:
-        status_parts.append(
-            "[red]● RAM: Critical![/]"
-        )
-
-    status_parts.append(
-        f"[cyan]↑{send_spd:.0f} "
-        f"↓{recv_spd:.0f} KB/s[/]"
-    )
-    status_parts.append(
-        f"[dim]{stats.get('net_connections', 0)}"
-        f" conns[/]"
-    )
-    status_parts.append(
-        "[dim]Ctrl+C to exit[/]"
+    pub = str(stats.public_ip)
+    cs = (
+        'dim white' if pub in [
+            'Fetching...', 'Unavailable', 'N/A'
+        ] else 'yellow'
     )
 
-    status_bar = Panel(
-        " │ ".join(status_parts),
-        style="on grey11",
-        height=3
+    st = Table(
+        show_header=False, box=None,
+        padding=(0, 2), expand=True
+    )
+    st.add_column(width=12)
+    st.add_column(width=16)
+    st.add_column(width=22)
+    st.add_column(width=20)
+    st.add_row(
+        Text(f'⏰ {now}', style='cyan'),
+        Text(health, style=hs),
+        Text(f'🌐 {pub}', style=cs),
+        Text(
+            f'CPU:{cpu:.0f}% MEM:{mem:.0f}%',
+            style='white'
+        )
     )
 
-    # ── Assemble Layout ──────────────────────────
+    return Panel(
+        st, border_style='dim white',
+        box=box.SIMPLE, padding=(0, 0)
+    )
+
+
+# ════════════════════════════════════════════════════
+#  LAYOUT
+# ════════════════════════════════════════════════════
+def build_layout(stats):
     layout = Layout()
 
     layout.split_column(
-        Layout(
-            Panel(header, box=box.HEAVY),
-            name="header",
-            size=3
-        ),
-        Layout(name="top", size=18),
-        Layout(name="logs"),
-        Layout(
-            status_bar,
-            name="status",
-            size=3
-        )
+        Layout(name='header', size=3),
+        Layout(name='body'),
+        Layout(name='footer', size=3),
     )
 
-    layout["top"].split_row(
-        Layout(cpu_panel, name="cpu"),
-        Layout(mem_panel, name="mem"),
-        Layout(net_panel, name="net"),
+    # Left 40% | Right 60%
+    layout['body'].split_row(
+        Layout(name='left', ratio=2),
+        Layout(name='right', ratio=3),
     )
 
-    layout["logs"].update(log_panel)
+    layout['header'].update(build_header())
+    layout['left'].update(
+        build_left_panel(stats)
+    )
+    layout['right'].update(build_right_panel())
+    layout['footer'].update(
+        build_status_bar(stats)
+    )
 
     return layout
 
 
 # ════════════════════════════════════════════════════
-#  MAIN MONITOR LOOP
+#  MAIN
 # ════════════════════════════════════════════════════
-def run_monitor():
-    """Main monitor loop"""
+def main():
+    console = Console()
     console.clear()
-    console.print(
-        "\n[bold cyan]Starting Live Monitor...[/]"
-    )
-    console.print(
-        "[dim]Real-time system stats + "
-        "scanner logs[/]\n"
+
+    print(
+        "\n  ⚡ Starting Monitor Dashboard...\n"
     )
 
-    # Start background stats collector
-    collector = StatsCollector()
-    time.sleep(1)
+    stats = StatsCollector()
+    time.sleep(1.0)
+
+    last_log_size = 0
+    last_log_mtime = 0
 
     try:
         with Live(
+            build_layout(stats),
             console=console,
             refresh_per_second=2,
             screen=True
         ) as live:
             while True:
+                # Detect log file changes
                 try:
-                    stats = collector.get()
-                    logs = read_logs()
-                    layout = build_layout(
-                        stats, logs
-                    )
-                    live.update(layout)
-                    time.sleep(0.5)
-
-                except KeyboardInterrupt:
-                    break
+                    if os.path.exists(LOG_FILE):
+                        sz = os.path.getsize(LOG_FILE)
+                        mt = os.path.getmtime(LOG_FILE)
+                        if (
+                            sz != last_log_size
+                            or mt != last_log_mtime
+                        ):
+                            last_log_size = sz
+                            last_log_mtime = mt
                 except Exception:
-                    time.sleep(1)
+                    pass
+
+                live.update(build_layout(stats))
+                time.sleep(0.5)
 
     except KeyboardInterrupt:
-        pass
-    finally:
-        collector.stop()
-
-    console.clear()
-    console.print(
-        "\n[bold cyan]Monitor closed.[/]"
-    )
+        stats.stop()
+        console.clear()
+        print(
+            "\n  Monitor stopped. Goodbye!\n"
+        )
 
 
-if __name__ == "__main__":
-    run_monitor()
+if __name__ == '__main__':
+    main()
