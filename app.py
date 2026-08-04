@@ -2,7 +2,7 @@
 Security Assessment Agent v2.0
 Category 1 + Category 2 + Category 3 Combined
 AI Engine: Groq (Llama 3.3 70B) - FREE
-Smart Connection + Anti-Track Auto Integration
+Smart Connection + Anti-Track + Connection Guard
 """
 
 import os
@@ -31,13 +31,14 @@ sys.path.insert(0, CAT1_DIR)
 sys.path.insert(0, CAT2_DIR)
 sys.path.insert(0, CAT3_DIR)
 
-# ── Global state ────────────────────────────────────
+# ── Global state ─────────────────────────────────────
 monitor_process = None
 LOG_FILE = os.path.join(BASE_DIR, 'monitor_logs.txt')
-smart_conn = None        # SmartConnection instance
-anti_track = None        # AntiTrackManager instance
-risk_level = 'LOW'       # Global risk level
-scan_session = None      # Shared requests session
+smart_conn = None           # SmartConnection instance
+anti_track = None           # AntiTrackManager instance
+connection_guard = None     # ConnectionGuard instance
+risk_level = 'LOW'          # Global risk level
+scan_session = None         # Shared requests session
 
 
 # ════════════════════════════════════════════════════
@@ -45,25 +46,27 @@ scan_session = None      # Shared requests session
 # ════════════════════════════════════════════════════
 def write_log(message, level='INFO'):
     """Write log entry for monitor.py to read."""
-    timestamp = datetime.now().strftime(
-        '%H:%M:%S'
-    )
+    timestamp = datetime.now().strftime('%H:%M:%S')
     prefix = {
-        'INFO': '[INFO]',
-        'WARN': '[WARN]',
-        'ERROR': '[ERROR]',
-        'SUCCESS': '[OK]',
+        'INFO':     '[INFO]',
+        'WARN':     '[WARN]',
+        'ERROR':    '[ERROR]',
+        'SUCCESS':  '[OK]',
         'CRITICAL': '[CRITICAL]',
-        'SCAN': '[SCAN]',
-        'AGENT': '[AGENT]',
-        'CONNECT': '[CONN]',
+        'SCAN':     '[SCAN]',
+        'AGENT':    '[AGENT]',
+        'CONNECT':  '[CONN]',
         'SECURITY': '[SEC]',
+        'GUARD':    '[GUARD]',
+        'BLOCK':    '[BLOCK]',
+        'ROTATE':   '[ROTATE]',
     }.get(level, '[INFO]')
 
     log_line = f"{timestamp} {prefix} {message}\n"
-
     try:
-        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        with open(
+            LOG_FILE, 'a', encoding='utf-8'
+        ) as f:
             f.write(log_line)
     except Exception:
         pass
@@ -72,7 +75,9 @@ def write_log(message, level='INFO'):
 def clear_log_file():
     """Clear log file at scan start."""
     try:
-        with open(LOG_FILE, 'w', encoding='utf-8') as f:
+        with open(
+            LOG_FILE, 'w', encoding='utf-8'
+        ) as f:
             f.write(
                 f"# Scan started: "
                 f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -100,7 +105,6 @@ def start_monitor():
 
     try:
         if sys.platform == 'win32':
-            # Try Windows Terminal first
             for cmd in [
                 ['wt', 'python', monitor_path],
                 [
@@ -122,12 +126,11 @@ def start_monitor():
         elif sys.platform == 'darwin':
             monitor_process = subprocess.Popen([
                 'osascript', '-e',
-                f'tell app "Terminal" to do script '
-                f'"python3 {monitor_path}"'
+                f'tell app "Terminal" to do script'
+                f' "python3 {monitor_path}"'
             ])
 
         else:
-            # Linux
             for term in [
                 'gnome-terminal', 'xterm',
                 'konsole', 'xfce4-terminal'
@@ -217,7 +220,7 @@ def print_main_banner():
         "  AI Engine: Groq (Llama 3.3 70B) - FREE"
     )
     print(
-        "  Smart Connection + Anti-Track: AUTO"
+        "  Smart Connection + Anti-Track + Guard"
     )
     print("═" * 62 + Style.RESET_ALL)
 
@@ -228,128 +231,108 @@ def print_main_banner():
 def print_menu():
     print(
         f"\n{Fore.YELLOW}"
-        "┌─────────────────────────────────────────"
-        "────────┐"
+        "┌──────────────────────────────────────────────────┐"
     )
     print(
-        "│           SELECT SCAN MODE               "
-        "       │"
+        "│            SELECT SCAN MODE                      │"
     )
     print(
-        "├─────────────────────────────────────────"
-        "────────┤"
+        "├──────────────────────────────────────────────────┤"
     )
     print(
-        "│                                          "
-        "       │"
+        "│                                                  │"
     )
     print(
         f"│  {Fore.GREEN}[1]{Fore.YELLOW}"
-        " Category 1  - Passive Only               "
-        "   │"
+        " Category 1  - Passive Only                   │"
     )
     print(
-        "│       Recon | Headers | SSL | Email      "
-        "       │"
+        "│       Recon | Headers | SSL | Email              │"
     )
     print(
-        "│       Safe - No consent needed           "
-        "       │"
+        "│       Safe - No consent needed                   │"
     )
     print(
-        "│                                          "
-        "       │"
+        "│                                                  │"
     )
     print(
         f"│  {Fore.RED}[2]{Fore.YELLOW}"
-        " Category 2  - Active Scan                "
-        "   │"
+        " Category 2  - Active Scan                    │"
     )
     print(
-        "│       SQLi | XSS | PathTraversal | CORS  "
-        "       │"
+        "│       SQLi | XSS | PathTraversal | CORS          │"
     )
     print(
-        "│       GraphQL | JWT | API                "
-        "       │"
+        "│       GraphQL | JWT | API                        │"
     )
     print(
-        "│       Requires written consent           "
-        "       │"
+        "│       Requires written consent                   │"
     )
     print(
-        "│                                          "
-        "       │"
+        "│                                                  │"
     )
     print(
         f"│  {Fore.MAGENTA}[3]{Fore.YELLOW}"
-        " Category 3  - Advanced Scan              "
-        "   │"
+        " Category 3  - Advanced Scan                  │"
     )
     print(
-        "│       Auth | CmdInject | FileUpload ...  "
-        "       │"
+        "│       Auth | CmdInject | FileUpload | SSRF       │"
     )
     print(
-        "│       Requires written consent           "
-        "       │"
+        "│       XXE | NoSQL | SSTI | CSRF | WebSocket      │"
     )
     print(
-        "│                                          "
-        "       │"
+        "│       HostHeader | Cache | OAuth | AccessCtrl    │"
+    )
+    print(
+        "│       Requires written consent                   │"
+    )
+    print(
+        "│                                                  │"
     )
     print(
         f"│  {Fore.CYAN}[4]{Fore.YELLOW}"
-        " Cat 1 + 2   - Passive + Active           "
-        "   │"
+        " Cat 1 + 2   - Passive + Active               │"
     )
     print(
-        "│                                          "
-        "       │"
+        "│                                                  │"
     )
     print(
         f"│  {Fore.CYAN}[5]{Fore.YELLOW}"
-        " Cat 1 + 3   - Passive + Advanced         "
-        "   │"
+        " Cat 1 + 3   - Passive + Advanced             │"
     )
     print(
-        "│                                          "
-        "       │"
+        "│                                                  │"
     )
     print(
         f"│  {Fore.CYAN}[6]{Fore.YELLOW}"
-        " Cat 2 + 3   - Active + Advanced          "
-        "   │"
+        " Cat 2 + 3   - Active + Advanced              │"
     )
     print(
-        "│                                          "
-        "       │"
+        "│                                                  │"
     )
     print(
         f"│  {Fore.WHITE}[7]{Fore.YELLOW}"
-        " Full Scan   - All 3 Categories           "
-        "   │"
+        " Full Scan   - All 3 Categories               │"
     )
     print(
-        "│       Cat1 + Cat2 + Cat3 assessment      "
-        "       │"
+        "│       Cat1 + Cat2 + Cat3 full assessment         │"
     )
     print(
-        "│                                          "
-        "       │"
+        "│       Consent required for active phases         │"
+    )
+    print(
+        "│                                                  │"
     )
     print(
         f"│  {Fore.WHITE}[8]{Fore.YELLOW}"
-        " Exit                                     "
-        "   │"
+        " Exit                                         │"
     )
     print(
-        "│                                          "
-        "       │"
+        "│                                                  │"
     )
     print(
-        "└─────────────────────────────────────────"
-        "────────┘"
+        "└──────────────────────────────────────────────────┘"
         + Style.RESET_ALL
     )
 
@@ -388,9 +371,7 @@ def get_api_key():
     ).strip()
 
     if groq_key:
-        masked = (
-            groq_key[:8] + '....' + groq_key[-4:]
-        )
+        masked = groq_key[:8] + '....' + groq_key[-4:]
         print(
             f"\n{Fore.GREEN}[✓] Groq API Key : "
             f"{masked}"
@@ -429,9 +410,7 @@ def print_section(title, color=Fore.CYAN):
 # ════════════════════════════════════════════════════
 def save_raw_json(results, out_dir, target, label):
     os.makedirs(out_dir, exist_ok=True)
-    timestamp = datetime.now().strftime(
-        '%Y%m%d_%H%M%S'
-    )
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     target_clean = (
         target.replace('https://', '')
         .replace('http://', '')
@@ -440,16 +419,12 @@ def save_raw_json(results, out_dir, target, label):
     )
     json_path = os.path.join(
         out_dir,
-        f"{target_clean}_{timestamp}"
-        f"_{label}_raw.json"
+        f"{target_clean}_{timestamp}_{label}_raw.json"
     )
     with open(
         json_path, 'w', encoding='utf-8'
     ) as f:
-        json.dump(
-            results, f,
-            indent=2, default=str
-        )
+        json.dump(results, f, indent=2, default=str)
     print(
         f"{Fore.YELLOW}[!] Raw JSON: {json_path}"
         + Style.RESET_ALL
@@ -459,29 +434,28 @@ def save_raw_json(results, out_dir, target, label):
 
 
 # ════════════════════════════════════════════════════
-#  RISK ASSESSMENT + ANTI-TRACK INIT
+#  PRE-SCAN SETUP
+#  Risk → Anti-Track → SmartConnection → Guard
 # ════════════════════════════════════════════════════
 def run_pre_scan_setup(target, groq_key):
     """
-    Run before any scan:
-    1. Assess target risk
-    2. Init anti-track if needed
-    3. Setup smart connection
-    Returns: (risk_level, session)
+    4-step pre-scan setup:
+    1. Risk Assessment
+    2. Anti-Track (if needed)
+    3. Smart Connection
+    4. Connection Guard (continuous monitoring)
     """
     global smart_conn, anti_track, risk_level
-    global scan_session
+    global scan_session, connection_guard
 
-    print_section(
-        "PRE-SCAN SETUP", Fore.CYAN
-    )
+    print_section("PRE-SCAN SETUP", Fore.CYAN)
     write_log(
         f"Pre-scan setup for: {target}", 'SCAN'
     )
 
-    # ── Step 1: Risk Assessment ──────────────────────
+    # ── STEP 1: Risk Assessment ──────────────────────
     print(
-        f"\n{Fore.CYAN}[STEP 1/3] "
+        f"\n{Fore.CYAN}[STEP 1/4] "
         "Target Risk Assessment"
         + Style.RESET_ALL
     )
@@ -500,28 +474,24 @@ def run_pre_scan_setup(target, groq_key):
     except ImportError:
         print(
             f"  {Fore.YELLOW}[!] risk_checker.py "
-            "not found. Using LOW risk default."
+            "not found. Using LOW."
             + Style.RESET_ALL
         )
         risk_level = 'LOW'
         write_log(
-            'risk_checker not found, using LOW',
-            'WARN'
+            'risk_checker not found → LOW', 'WARN'
         )
     except Exception as e:
         print(
-            f"  {Fore.YELLOW}[!] Risk check error: "
-            f"{e}. Using LOW."
+            f"  {Fore.YELLOW}[!] Risk error: {e}"
             + Style.RESET_ALL
         )
         risk_level = 'LOW'
-        write_log(
-            f'Risk check error: {e}', 'WARN'
-        )
+        write_log(f'Risk check error: {e}', 'WARN')
 
-    # ── Step 2: Anti-Track (if needed) ──────────────
+    # ── STEP 2: Anti-Track ───────────────────────────
     print(
-        f"\n{Fore.CYAN}[STEP 2/3] "
+        f"\n{Fore.CYAN}[STEP 2/4] "
         "Anti-Track Configuration"
         + Style.RESET_ALL
     )
@@ -539,7 +509,7 @@ def run_pre_scan_setup(target, groq_key):
             if risk_level == 'HIGH':
                 print(
                     f"  {Fore.RED}[*] HIGH RISK - "
-                    "Running ADVANCED anti-track..."
+                    "ADVANCED anti-track..."
                     + Style.RESET_ALL
                 )
                 write_log(
@@ -555,7 +525,7 @@ def run_pre_scan_setup(target, groq_key):
             elif risk_level == 'MEDIUM':
                 print(
                     f"  {Fore.YELLOW}[*] MEDIUM RISK - "
-                    "Running BASIC anti-track..."
+                    "BASIC anti-track..."
                     + Style.RESET_ALL
                 )
                 write_log(
@@ -574,7 +544,7 @@ def run_pre_scan_setup(target, groq_key):
         except ImportError:
             print(
                 f"  {Fore.YELLOW}[!] anti_track.py "
-                "not found. Skipping."
+                "not found."
                 + Style.RESET_ALL
             )
             write_log(
@@ -592,50 +562,45 @@ def run_pre_scan_setup(target, groq_key):
     else:
         print(
             f"  {Fore.GREEN}[✓] LOW RISK - "
-            "Anti-track: OFF (not needed)"
+            "Anti-track: OFF"
             + Style.RESET_ALL
         )
-        write_log(
-            'Anti-track: OFF (low risk)', 'INFO'
-        )
+        write_log('Anti-track: OFF (low risk)', 'INFO')
 
-    # ── Step 3: Smart Connection ─────────────────────
+    # ── STEP 3: Smart Connection ─────────────────────
     print(
-        f"\n{Fore.CYAN}[STEP 3/3] "
+        f"\n{Fore.CYAN}[STEP 3/4] "
         "Smart Connection Setup"
         + Style.RESET_ALL
     )
     write_log(
-        f'Setting up smart connection '
-        f'(risk={risk_level})',
+        f'Smart connection setup (risk={risk_level})',
         'CONNECT'
     )
+
+    raw_session = None
 
     try:
         from smart_connection import SmartConnection
         smart_conn = SmartConnection(
             target, risk_level
         )
-        scan_session = smart_conn.get_session()
+        raw_session = smart_conn.get_session()
 
-        if scan_session is None:
+        if raw_session is None:
             print(
-                f"  {Fore.RED}[!] Could not "
-                "establish connection. Exiting."
+                f"  {Fore.RED}[!] Connection failed."
                 + Style.RESET_ALL
             )
-            write_log(
-                'Connection setup failed', 'ERROR'
-            )
+            write_log('Connection failed', 'ERROR')
             sys.exit(1)
 
         method = smart_conn.selected_method
         write_log(
-            f'Connection: {method.upper()}',
-            'CONNECT'
+            f'Connection: {method.upper()}', 'CONNECT'
         )
         print(
-            f"  {Fore.GREEN}[✓] Connection ready: "
+            f"  {Fore.GREEN}[✓] Connection: "
             f"{method.upper()}"
             + Style.RESET_ALL
         )
@@ -646,73 +611,180 @@ def run_pre_scan_setup(target, groq_key):
             "not found. Using direct."
             + Style.RESET_ALL
         )
-        import requests
-        scan_session = requests.Session()
-        scan_session.headers.update({
+        import requests as _req
+        raw_session = _req.Session()
+        raw_session.headers.update({
             'User-Agent': (
                 'Mozilla/5.0 '
                 '(Windows NT 10.0; Win64; x64)'
             )
         })
         write_log(
-            'smart_connection not found, '
-            'using direct session',
+            'smart_connection not found → direct',
             'WARN'
         )
     except Exception as e:
         print(
-            f"  {Fore.YELLOW}[!] Smart connection "
-            f"error: {e}. Using direct."
+            f"  {Fore.YELLOW}[!] Connection error: "
+            f"{e}. Using direct."
             + Style.RESET_ALL
         )
-        import requests
-        scan_session = requests.Session()
+        import requests as _req
+        raw_session = _req.Session()
         write_log(
-            f'Smart connection error: {e}', 'WARN'
+            f'Connection error: {e}', 'WARN'
         )
 
-    # ── Summary ──────────────────────────────────────
+    # ── STEP 4: Connection Guard ─────────────────────
     print(
-        f"\n{Fore.CYAN}" + "─" * 40
+        f"\n{Fore.CYAN}[STEP 4/4] "
+        "Connection Guard Setup"
         + Style.RESET_ALL
     )
-    print(
-        f"  {Fore.WHITE}Risk Level  : "
-        + {
-            'HIGH': Fore.RED,
-            'MEDIUM': Fore.YELLOW,
-            'LOW': Fore.GREEN
-        }.get(risk_level, Fore.WHITE)
-        + risk_level
-        + Style.RESET_ALL
+    write_log(
+        'Initializing connection guard...', 'GUARD'
     )
-    print(
-        f"  {Fore.WHITE}Anti-Track  : "
-        + (
-            f"{Fore.RED}ADVANCED"
-            if risk_level == 'HIGH'
-            else f"{Fore.YELLOW}BASIC"
-            if risk_level == 'MEDIUM'
-            else f"{Fore.GREEN}OFF"
+
+    try:
+        from connection_guard import ConnectionGuard
+        connection_guard = ConnectionGuard(
+            smart_connection=smart_conn
         )
-        + Style.RESET_ALL
-    )
+        connection_guard.risk_level = risk_level
+        connection_guard.init_session(raw_session)
+
+        # Risk-based thresholds
+        if risk_level == 'HIGH':
+            connection_guard.block_threshold = 2
+            connection_guard.timeout_threshold = 3
+            write_log(
+                'Guard thresholds: HIGH '
+                '(block=2, timeout=3)',
+                'GUARD'
+            )
+        elif risk_level == 'MEDIUM':
+            connection_guard.block_threshold = 3
+            connection_guard.timeout_threshold = 4
+            write_log(
+                'Guard thresholds: MEDIUM '
+                '(block=3, timeout=4)',
+                'GUARD'
+            )
+        else:
+            connection_guard.block_threshold = 5
+            connection_guard.timeout_threshold = 7
+            write_log(
+                'Guard thresholds: LOW '
+                '(block=5, timeout=7)',
+                'GUARD'
+            )
+
+        # Start background health monitor
+        connection_guard.start()
+
+        # GuardedSession wraps all requests
+        scan_session = connection_guard.get_session()
+
+        print(
+            f"  {Fore.GREEN}[✓] Connection Guard "
+            "ACTIVE"
+            + Style.RESET_ALL
+        )
+        print(
+            f"  {Fore.WHITE}  Block threshold  : "
+            f"{connection_guard.block_threshold} "
+            "consecutive blocks"
+            + Style.RESET_ALL
+        )
+        print(
+            f"  {Fore.WHITE}  Timeout threshold: "
+            f"{connection_guard.timeout_threshold} "
+            "consecutive timeouts"
+            + Style.RESET_ALL
+        )
+        print(
+            f"  {Fore.WHITE}  Auto-rotate      : "
+            f"{Fore.GREEN}ON (Direct→Proxy→Tor)"
+            + Style.RESET_ALL
+        )
+        write_log(
+            f'Guard active. '
+            f'block_threshold='
+            f'{connection_guard.block_threshold} '
+            f'timeout_threshold='
+            f'{connection_guard.timeout_threshold}',
+            'GUARD'
+        )
+
+    except ImportError:
+        print(
+            f"  {Fore.YELLOW}[!] connection_guard.py "
+            "not found. Using direct session."
+            + Style.RESET_ALL
+        )
+        scan_session = raw_session
+        write_log(
+            'connection_guard not found', 'WARN'
+        )
+    except Exception as e:
+        print(
+            f"  {Fore.YELLOW}[!] Guard error: {e}"
+            + Style.RESET_ALL
+        )
+        scan_session = raw_session
+        write_log(f'Guard error: {e}', 'WARN')
+
+    # ── Summary ──────────────────────────────────────
     conn_method = getattr(
         smart_conn, 'selected_method', 'direct'
     ) if smart_conn else 'direct'
+
+    guard_active = connection_guard is not None
+
+    risk_color = {
+        'HIGH': Fore.RED,
+        'MEDIUM': Fore.YELLOW,
+        'LOW': Fore.GREEN
+    }.get(risk_level, Fore.WHITE)
+
+    antitrack_str = (
+        f"{Fore.RED}ADVANCED"
+        if risk_level == 'HIGH'
+        else f"{Fore.YELLOW}BASIC"
+        if risk_level == 'MEDIUM'
+        else f"{Fore.GREEN}OFF"
+    )
+
+    guard_str = (
+        f"{Fore.GREEN}ACTIVE"
+        if guard_active
+        else f"{Fore.YELLOW}OFF"
+    )
+
+    print(f"\n{Fore.CYAN}" + "─" * 45 + Style.RESET_ALL)
+    print(
+        f"  {Fore.WHITE}Risk Level  : "
+        f"{risk_color}{risk_level}"
+        + Style.RESET_ALL
+    )
+    print(
+        f"  {Fore.WHITE}Anti-Track  : {antitrack_str}"
+        + Style.RESET_ALL
+    )
     print(
         f"  {Fore.WHITE}Connection  : "
         f"{Fore.CYAN}{conn_method.upper()}"
         + Style.RESET_ALL
     )
     print(
-        f"{Fore.CYAN}" + "─" * 40
+        f"  {Fore.WHITE}Guard       : {guard_str}"
         + Style.RESET_ALL
     )
+    print(f"{Fore.CYAN}" + "─" * 45 + Style.RESET_ALL)
+
     write_log(
-        f'Pre-scan complete. '
-        f'Risk={risk_level} '
-        f'Connection={conn_method}',
+        f'Pre-scan complete: Risk={risk_level} '
+        f'Conn={conn_method} Guard={guard_active}',
         'SUCCESS'
     )
 
@@ -725,15 +797,12 @@ def run_pre_scan_setup(target, groq_key):
 def generate_pdf_from_content(
     content, pdf_path, groq_key
 ):
-    """
-    Try cat2 → cat3 → cat1 for PDF generation.
-    """
+    """Try cat2 → cat3 → cat1 for PDF."""
     generators = [
         (CAT2_DIR, 'ActiveReportGenerator'),
         (CAT3_DIR, 'AdvancedReportGenerator'),
         (CAT1_DIR, 'ReportGenerator'),
     ]
-
     old_dir = os.getcwd()
 
     for cat_dir, class_name in generators:
@@ -744,9 +813,7 @@ def generate_pdf_from_content(
             mod = importlib.import_module(
                 'core.report_generator'
             )
-            GenClass = getattr(
-                mod, class_name, None
-            )
+            GenClass = getattr(mod, class_name, None)
 
             if GenClass is None:
                 continue
@@ -758,8 +825,7 @@ def generate_pdf_from_content(
                 + Style.RESET_ALL
             )
             write_log(
-                f'PDF generated: {pdf_path}',
-                'SUCCESS'
+                f'PDF generated: {pdf_path}', 'SUCCESS'
             )
             return True
 
@@ -843,9 +909,7 @@ def save_combined_summary(
     total_duration, groq_key,
     scan_label='FULL'
 ):
-    timestamp = datetime.now().strftime(
-        '%Y%m%d_%H%M%S'
-    )
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     target_clean = (
         target.replace('https://', '')
         .replace('http://', '')
@@ -869,9 +933,7 @@ def save_combined_summary(
         stats['critical'] + stats['high']
         + stats['medium'] + stats['low']
     )
-    now = datetime.now().strftime(
-        '%Y-%m-%d %H:%M:%S'
-    )
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     cats_run = []
     if cat1_results:
@@ -886,6 +948,11 @@ def save_combined_summary(
         smart_conn, 'selected_method', 'direct'
     ) if smart_conn else 'direct'
 
+    # Guard stats
+    guard_stats = {}
+    if connection_guard:
+        guard_stats = connection_guard.get_stats()
+
     lines = []
     lines.append("# Security Assessment Summary")
     lines.append("")
@@ -895,15 +962,27 @@ def save_combined_summary(
     lines.append(f"| Date | {now} |")
     lines.append(f"| Duration | {total_duration}s |")
     lines.append(f"| Scan Type | {cats_str} |")
-    lines.append(
-        f"| Risk Level | {risk_level} |"
-    )
+    lines.append(f"| Risk Level | {risk_level} |")
     lines.append(
         f"| Connection | {conn_method.upper()} |"
     )
-    lines.append(
-        "| Classification | CONFIDENTIAL |"
-    )
+
+    # Add guard stats to report if available
+    if guard_stats:
+        lines.append(
+            f"| Total Requests | "
+            f"{guard_stats.get('total_requests', 0)} |"
+        )
+        lines.append(
+            f"| Blocked Requests | "
+            f"{guard_stats.get('blocked', 0)} |"
+        )
+        lines.append(
+            f"| Auto-Rotations | "
+            f"{guard_stats.get('rotations', 0)} |"
+        )
+
+    lines.append("| Classification | CONFIDENTIAL |")
     lines.append("")
     lines.append("## Combined Risk Summary")
     lines.append("")
@@ -956,8 +1035,8 @@ def save_combined_summary(
         f.write(content)
 
     print(
-        f"\n{Fore.GREEN}[✓] Summary: "
-        f"{summary_path}" + Style.RESET_ALL
+        f"\n{Fore.GREEN}[✓] Summary: {summary_path}"
+        + Style.RESET_ALL
     )
     write_log(
         f'Summary saved: {summary_path}', 'SUCCESS'
@@ -984,8 +1063,7 @@ def run_category1(target, groq_key):
         "SSL | Email Security" + Style.RESET_ALL
     )
     write_log(
-        'Starting Category 1 - Passive scan',
-        'AGENT'
+        'Starting Category 1 - Passive scan', 'AGENT'
     )
 
     cat1_out = os.path.join(
@@ -1009,19 +1087,17 @@ def run_category1(target, groq_key):
             target, groq_key
         )
 
-        # Inject shared session if available
+        # Inject guarded session
         if scan_session:
             orchestrator.session = scan_session
 
         start = time.time()
         write_log('Cat1: Running 4 agents...', 'AGENT')
-
         cat1_results = orchestrator.run_assessment()
         duration = round(time.time() - start)
 
         write_log(
-            f'Cat1 complete in {duration}s',
-            'SUCCESS'
+            f'Cat1 complete in {duration}s', 'SUCCESS'
         )
 
         print_section(
@@ -1030,9 +1106,7 @@ def run_category1(target, groq_key):
         )
 
         if groq_key:
-            cat1_report = (
-                orchestrator.generate_report()
-            )
+            cat1_report = orchestrator.generate_report()
         else:
             save_raw_json(
                 cat1_results, cat1_out,
@@ -1051,9 +1125,7 @@ def run_category1(target, groq_key):
             f"{Fore.RED}[!] Category 1 Error: {e}"
             + Style.RESET_ALL
         )
-        write_log(
-            f'Cat1 error: {e}', 'ERROR'
-        )
+        write_log(f'Cat1 error: {e}', 'ERROR')
         import traceback
         traceback.print_exc()
 
@@ -1078,8 +1150,7 @@ def run_category2(target, groq_key):
         "GraphQL | JWT | API" + Style.RESET_ALL
     )
     write_log(
-        'Starting Category 2 - Active scan',
-        'AGENT'
+        'Starting Category 2 - Active scan', 'AGENT'
     )
 
     cat2_out = os.path.join(
@@ -1103,7 +1174,7 @@ def run_category2(target, groq_key):
             target, groq_key
         )
 
-        # Inject shared session
+        # Inject guarded session
         if scan_session:
             orchestrator.shared_session = scan_session
 
@@ -1120,14 +1191,12 @@ def run_category2(target, groq_key):
                 + Style.RESET_ALL
             )
             write_log(
-                'Cat2 cancelled - no consent',
-                'WARN'
+                'Cat2 cancelled - no consent', 'WARN'
             )
             return None, None
 
         write_log(
-            f'Cat2 complete in {duration}s',
-            'SUCCESS'
+            f'Cat2 complete in {duration}s', 'SUCCESS'
         )
 
         print_section(
@@ -1136,9 +1205,7 @@ def run_category2(target, groq_key):
         )
 
         if groq_key:
-            cat2_report = (
-                orchestrator.generate_report()
-            )
+            cat2_report = orchestrator.generate_report()
         else:
             save_raw_json(
                 cat2_results, cat2_out,
@@ -1193,8 +1260,7 @@ def run_category3(
         " | AccessControl" + Style.RESET_ALL
     )
     write_log(
-        'Starting Category 3 - Advanced scan',
-        'AGENT'
+        'Starting Category 3 - Advanced scan', 'AGENT'
     )
 
     cat3_out = os.path.join(
@@ -1218,7 +1284,7 @@ def run_category3(
             target, groq_key
         )
 
-        # Inject shared session
+        # Inject guarded session
         if scan_session:
             orchestrator.shared_session = scan_session
 
@@ -1235,14 +1301,12 @@ def run_category3(
                 + Style.RESET_ALL
             )
             write_log(
-                'Cat3 cancelled - no consent',
-                'WARN'
+                'Cat3 cancelled - no consent', 'WARN'
             )
             return None, None
 
         write_log(
-            f'Cat3 complete in {duration}s',
-            'SUCCESS'
+            f'Cat3 complete in {duration}s', 'SUCCESS'
         )
 
         print_section(
@@ -1251,9 +1315,7 @@ def run_category3(
         )
 
         if groq_key:
-            cat3_report = (
-                orchestrator.generate_report()
-            )
+            cat3_report = orchestrator.generate_report()
         else:
             save_raw_json(
                 cat3_results, cat3_out,
@@ -1287,6 +1349,7 @@ def run_category3(
 #  AGENT SUMMARY PRINTER
 # ════════════════════════════════════════════════════
 def _print_agent_summary(results, agent_list):
+    """Print per-agent finding counts."""
     for key, label in agent_list:
         findings = results.get(key, [])
         count = (
@@ -1294,9 +1357,7 @@ def _print_agent_summary(results, agent_list):
             if isinstance(findings, list)
             else 0
         )
-        color = (
-            Fore.RED if count > 0 else Fore.GREEN
-        )
+        color = Fore.RED if count > 0 else Fore.GREEN
         icon = '⚠' if count > 0 else '✓'
         print(
             f"  {color}{icon}{Fore.WHITE} {label}: "
@@ -1305,8 +1366,7 @@ def _print_agent_summary(results, agent_list):
         )
         if count > 0:
             write_log(
-                f'{label}: {count} findings',
-                'WARN'
+                f'{label}: {count} findings', 'WARN'
             )
 
 
@@ -1332,15 +1392,19 @@ def print_final_summary(
         f"{Fore.CYAN}{total_duration}s"
         + Style.RESET_ALL
     )
+
+    risk_color = {
+        'HIGH': Fore.RED,
+        'MEDIUM': Fore.YELLOW,
+        'LOW': Fore.GREEN
+    }.get(risk_level, Fore.WHITE)
+
     print(
         f"{Fore.WHITE}Risk     : "
-        + {
-            'HIGH': Fore.RED,
-            'MEDIUM': Fore.YELLOW,
-            'LOW': Fore.GREEN
-        }.get(risk_level, Fore.WHITE)
-        + risk_level + Style.RESET_ALL
+        f"{risk_color}{risk_level}"
+        + Style.RESET_ALL
     )
+
     conn_method = getattr(
         smart_conn, 'selected_method', 'direct'
     ) if smart_conn else 'direct'
@@ -1350,10 +1414,21 @@ def print_final_summary(
         + Style.RESET_ALL
     )
 
+    # Guard stats
+    if connection_guard:
+        gs = connection_guard.get_stats()
+        print(
+            f"{Fore.WHITE}Guard    : "
+            f"{Fore.GREEN}Reqs={gs['total_requests']} "
+            f"Blocked={gs['blocked']} "
+            f"Rotated={gs['rotations']}"
+            + Style.RESET_ALL
+        )
+
+    # Cat 1
     if cat1_results:
         print(
-            f"\n{Fore.GREEN}"
-            "Category 1 - Passive Scan:"
+            f"\n{Fore.GREEN}Category 1 - Passive Scan:"
             + Style.RESET_ALL
         )
         c1_checks = [
@@ -1375,10 +1450,10 @@ def print_final_summary(
                 + Style.RESET_ALL
             )
 
+    # Cat 2
     if cat2_results:
         print(
-            f"\n{Fore.RED}"
-            "Category 2 - Active Scan:"
+            f"\n{Fore.RED}Category 2 - Active Scan:"
             + Style.RESET_ALL
         )
         c2_agents = [
@@ -1390,22 +1465,17 @@ def print_final_summary(
             ('jwt', 'JWT'),
             ('api', 'API Security'),
         ]
-        _print_agent_summary(
-            cat2_results, c2_agents
-        )
+        _print_agent_summary(cat2_results, c2_agents)
 
+    # Cat 3
     if cat3_results:
         print(
-            f"\n{Fore.MAGENTA}"
-            "Category 3 - Advanced Scan:"
+            f"\n{Fore.MAGENTA}Category 3 - Advanced:"
             + Style.RESET_ALL
         )
         c3_agents = [
             ('authentication', 'Authentication'),
-            (
-                'command_injection',
-                'Command Injection'
-            ),
+            ('command_injection', 'Command Injection'),
             ('file_upload', 'File Upload'),
             ('ssrf', 'SSRF'),
             ('xxe', 'XXE Injection'),
@@ -1413,10 +1483,7 @@ def print_final_summary(
             ('ssti', 'SSTI'),
             ('csrf', 'CSRF'),
             ('websocket', 'WebSocket'),
-            (
-                'http_host_header',
-                'HTTP Host Header'
-            ),
+            ('http_host_header', 'HTTP Host Header'),
             ('web_cache', 'Web Cache'),
             ('oauth', 'OAuth'),
             (
@@ -1425,10 +1492,9 @@ def print_final_summary(
             ),
             ('access_control', 'Access Control'),
         ]
-        _print_agent_summary(
-            cat3_results, c3_agents
-        )
+        _print_agent_summary(cat3_results, c3_agents)
 
+    # Totals
     stats = build_combined_stats(
         cat1_report, cat2_results, cat3_results
     )
@@ -1438,8 +1504,7 @@ def print_final_summary(
     )
 
     print(
-        f"\n{Fore.CYAN}" + "─" * 40
-        + Style.RESET_ALL
+        f"\n{Fore.CYAN}" + "─" * 40 + Style.RESET_ALL
     )
     print(
         f"  {Fore.WHITE}Total Findings : "
@@ -1474,11 +1539,64 @@ def print_final_summary(
     )
 
     write_log(
-        f'SCAN COMPLETE. Total: {total} findings. '
-        f'Critical: {stats["critical"]} '
-        f'High: {stats["high"]}',
+        f'SCAN COMPLETE: Total={total} '
+        f'Critical={stats["critical"]} '
+        f'High={stats["high"]}',
         'SUCCESS'
     )
+
+
+# ════════════════════════════════════════════════════
+#  CLEANUP
+# ════════════════════════════════════════════════════
+def cleanup():
+    """Cleanup all resources on exit."""
+    global connection_guard, monitor_process
+
+    # Print and log guard final stats
+    if connection_guard:
+        gs = connection_guard.get_stats()
+        write_log(
+            f'Final guard stats: '
+            f'Reqs={gs["total_requests"]} '
+            f'OK={gs["successful"]} '
+            f'Blocked={gs["blocked"]} '
+            f'Timeouts={gs["timeouts"]} '
+            f'Rotations={gs["rotations"]}',
+            'GUARD'
+        )
+        print(
+            f"\n{Fore.CYAN}Connection Guard Stats:"
+            + Style.RESET_ALL
+        )
+        print(
+            f"  {Fore.WHITE}Total Requests : "
+            f"{Fore.CYAN}{gs['total_requests']}"
+            + Style.RESET_ALL
+        )
+        print(
+            f"  {Fore.WHITE}Successful     : "
+            f"{Fore.GREEN}{gs['successful']}"
+            + Style.RESET_ALL
+        )
+        print(
+            f"  {Fore.WHITE}Blocked        : "
+            f"{Fore.RED}{gs['blocked']}"
+            + Style.RESET_ALL
+        )
+        print(
+            f"  {Fore.WHITE}Timeouts       : "
+            f"{Fore.YELLOW}{gs['timeouts']}"
+            + Style.RESET_ALL
+        )
+        print(
+            f"  {Fore.WHITE}Auto-Rotations : "
+            f"{Fore.YELLOW}{gs['rotations']}"
+            + Style.RESET_ALL
+        )
+        connection_guard.stop()
+
+    stop_monitor()
 
 
 # ════════════════════════════════════════════════════
@@ -1497,8 +1615,7 @@ def main():
 
     if choice == '8':
         print(
-            f"{Fore.YELLOW}Goodbye!"
-            + Style.RESET_ALL
+            f"{Fore.YELLOW}Goodbye!" + Style.RESET_ALL
         )
         sys.exit(0)
 
@@ -1506,176 +1623,177 @@ def main():
     if choice not in valid:
         print(
             f"{Fore.RED}[!] Invalid option. "
-            "Please select 1-8." + Style.RESET_ALL
+            "Select 1-8." + Style.RESET_ALL
         )
         sys.exit(1)
 
     target = get_target()
 
-    # ── Pre-scan setup ───────────────────────────────
+    # ── Pre-scan ─────────────────────────────────────
     clear_log_file()
     start_monitor()
     write_log(
-        f'Target: {target} | Choice: {choice}',
-        'SCAN'
+        f'Target: {target} | Choice: {choice}', 'SCAN'
     )
 
-    # ✅ Risk assessment + anti-track + connection
+    # ✅ 4-step setup: Risk→AntiTrack→Conn→Guard
     run_pre_scan_setup(target, groq_key)
 
     app_start = time.time()
 
-    cat1_results = None
-    cat1_report = None
-    cat2_results = None
-    cat2_report = None
-    cat3_results = None
-    cat3_report = None
+    cat1_results = cat1_report = None
+    cat2_results = cat2_report = None
+    cat3_results = cat3_report = None
 
     # ════════════════════════════════════════════════
-    #  CHOICE ROUTING
+    #  ROUTING
     # ════════════════════════════════════════════════
-
-    if choice == '1':
-        cat1_results, cat1_report = run_category1(
-            target, groq_key
-        )
-
-    elif choice == '2':
-        cat2_results, cat2_report = run_category2(
-            target, groq_key
-        )
-
-    elif choice == '3':
-        cat3_results, cat3_report = run_category3(
-            target, groq_key,
-            skip_consent=False
-        )
-
-    elif choice == '4':
-        print(
-            f"\n{Fore.CYAN}[*] Cat 1 + Cat 2"
-            + Style.RESET_ALL
-        )
-        cat1_results, cat1_report = run_category1(
-            target, groq_key
-        )
-        cat2_results, cat2_report = run_category2(
-            target, groq_key
-        )
-        if cat1_results or cat2_results:
-            save_combined_summary(
-                target,
-                cat1_results, cat2_results, None,
-                cat1_report, cat2_report, None,
-                round(time.time() - app_start),
-                groq_key, 'CAT1_CAT2'
+    try:
+        if choice == '1':
+            cat1_results, cat1_report = (
+                run_category1(target, groq_key)
             )
 
-    elif choice == '5':
-        print(
-            f"\n{Fore.CYAN}[*] Cat 1 + Cat 3"
-            + Style.RESET_ALL
-        )
-        cat1_results, cat1_report = run_category1(
-            target, groq_key
-        )
-        cat3_results, cat3_report = run_category3(
-            target, groq_key,
-            skip_consent=False
-        )
-        if cat1_results or cat3_results:
-            save_combined_summary(
-                target,
-                cat1_results, None, cat3_results,
-                cat1_report, None, cat3_report,
-                round(time.time() - app_start),
-                groq_key, 'CAT1_CAT3'
+        elif choice == '2':
+            cat2_results, cat2_report = (
+                run_category2(target, groq_key)
             )
 
-    elif choice == '6':
-        print(
-            f"\n{Fore.CYAN}[*] Cat 2 + Cat 3"
-            + Style.RESET_ALL
-        )
-        cat2_results, cat2_report = run_category2(
-            target, groq_key
-        )
-        if cat2_results is None:
-            print(
-                f"{Fore.YELLOW}[!] Cat2 cancelled."
-                + Style.RESET_ALL
-            )
-        else:
-            # Cat2 gave consent → Cat3 skips it
+        elif choice == '3':
             cat3_results, cat3_report = (
                 run_category3(
                     target, groq_key,
-                    skip_consent=True
+                    skip_consent=False
                 )
             )
-            if cat2_results or cat3_results:
+
+        elif choice == '4':
+            write_log('Running Cat 1 + Cat 2', 'SCAN')
+            cat1_results, cat1_report = (
+                run_category1(target, groq_key)
+            )
+            cat2_results, cat2_report = (
+                run_category2(target, groq_key)
+            )
+            if cat1_results or cat2_results:
                 save_combined_summary(
                     target,
-                    None, cat2_results, cat3_results,
-                    None, cat2_report, cat3_report,
+                    cat1_results, cat2_results, None,
+                    cat1_report, cat2_report, None,
                     round(time.time() - app_start),
-                    groq_key, 'CAT2_CAT3'
+                    groq_key, 'CAT1_CAT2'
                 )
 
-    elif choice == '7':
-        print(
-            f"\n{Fore.CYAN}[*] FULL SCAN - "
-            "All 3 Categories" + Style.RESET_ALL
-        )
-
-        print(
-            f"\n{Fore.GREEN}[*] Phase 1: Cat1 "
-            "(Passive)" + Style.RESET_ALL
-        )
-        write_log('Phase 1: Category 1', 'SCAN')
-        cat1_results, cat1_report = run_category1(
-            target, groq_key
-        )
-
-        print(
-            f"\n{Fore.YELLOW}[*] Phase 2: Cat2 "
-            "(Active)" + Style.RESET_ALL
-        )
-        write_log('Phase 2: Category 2', 'SCAN')
-        cat2_results, cat2_report = run_category2(
-            target, groq_key
-        )
-
-        print(
-            f"\n{Fore.MAGENTA}[*] Phase 3: Cat3 "
-            "(Advanced)" + Style.RESET_ALL
-        )
-        write_log('Phase 3: Category 3', 'SCAN')
-
-        # If Cat2 succeeded → skip Cat3 consent
-        skip = cat2_results is not None
-        cat3_results, cat3_report = run_category3(
-            target, groq_key,
-            skip_consent=skip
-        )
-
-        if (
-            cat1_results
-            or cat2_results
-            or cat3_results
-        ):
-            save_combined_summary(
-                target,
-                cat1_results,
-                cat2_results,
-                cat3_results,
-                cat1_report,
-                cat2_report,
-                cat3_report,
-                round(time.time() - app_start),
-                groq_key, 'FULL'
+        elif choice == '5':
+            write_log('Running Cat 1 + Cat 3', 'SCAN')
+            cat1_results, cat1_report = (
+                run_category1(target, groq_key)
             )
+            cat3_results, cat3_report = (
+                run_category3(
+                    target, groq_key,
+                    skip_consent=False
+                )
+            )
+            if cat1_results or cat3_results:
+                save_combined_summary(
+                    target,
+                    cat1_results, None, cat3_results,
+                    cat1_report, None, cat3_report,
+                    round(time.time() - app_start),
+                    groq_key, 'CAT1_CAT3'
+                )
+
+        elif choice == '6':
+            write_log('Running Cat 2 + Cat 3', 'SCAN')
+            cat2_results, cat2_report = (
+                run_category2(target, groq_key)
+            )
+            if cat2_results is None:
+                print(
+                    f"{Fore.YELLOW}[!] Cat2 cancelled."
+                    + Style.RESET_ALL
+                )
+                write_log(
+                    'Cat2 cancelled - stopping', 'WARN'
+                )
+            else:
+                # Cat2 gave consent → Cat3 skips
+                cat3_results, cat3_report = (
+                    run_category3(
+                        target, groq_key,
+                        skip_consent=True
+                    )
+                )
+                if cat2_results or cat3_results:
+                    save_combined_summary(
+                        target,
+                        None, cat2_results,
+                        cat3_results,
+                        None, cat2_report,
+                        cat3_report,
+                        round(time.time() - app_start),
+                        groq_key, 'CAT2_CAT3'
+                    )
+
+        elif choice == '7':
+            write_log('Running FULL SCAN', 'SCAN')
+
+            write_log('Phase 1: Category 1', 'SCAN')
+            print(
+                f"\n{Fore.GREEN}[*] Phase 1: Cat1"
+                + Style.RESET_ALL
+            )
+            cat1_results, cat1_report = (
+                run_category1(target, groq_key)
+            )
+
+            write_log('Phase 2: Category 2', 'SCAN')
+            print(
+                f"\n{Fore.YELLOW}[*] Phase 2: Cat2"
+                + Style.RESET_ALL
+            )
+            cat2_results, cat2_report = (
+                run_category2(target, groq_key)
+            )
+
+            write_log('Phase 3: Category 3', 'SCAN')
+            print(
+                f"\n{Fore.MAGENTA}[*] Phase 3: Cat3"
+                + Style.RESET_ALL
+            )
+            # Cat2 succeeded → skip Cat3 consent
+            skip = cat2_results is not None
+            cat3_results, cat3_report = (
+                run_category3(
+                    target, groq_key,
+                    skip_consent=skip
+                )
+            )
+
+            if (
+                cat1_results
+                or cat2_results
+                or cat3_results
+            ):
+                save_combined_summary(
+                    target,
+                    cat1_results,
+                    cat2_results,
+                    cat3_results,
+                    cat1_report,
+                    cat2_report,
+                    cat3_report,
+                    round(time.time() - app_start),
+                    groq_key, 'FULL'
+                )
+
+    except KeyboardInterrupt:
+        print(
+            f"\n{Fore.YELLOW}[!] Scan interrupted."
+            + Style.RESET_ALL
+        )
+        write_log('Scan interrupted by user', 'WARN')
 
     # ── Final summary ────────────────────────────────
     total_duration = round(time.time() - app_start)
@@ -1687,7 +1805,7 @@ def main():
         total_duration
     )
 
-    stop_monitor()
+    cleanup()
 
 
 if __name__ == "__main__":
