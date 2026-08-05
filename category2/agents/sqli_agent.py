@@ -142,7 +142,6 @@ class SQLiAgent:
                                 f"{Style.RESET_ALL}"
                             )
                             break
-                    time.sleep(0.3)
                 except Exception:
                     pass
 
@@ -229,7 +228,6 @@ class SQLiAgent:
                         )
                 except Exception:
                     pass
-                time.sleep(0.5)
 
         return self.findings
 

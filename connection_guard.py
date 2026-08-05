@@ -163,7 +163,6 @@ class ConnectionGuard:
         Periodically checks connection health.
         """
         while self._running:
-            time.sleep(30)
             try:
                 self._periodic_health_check()
             except Exception:
@@ -400,7 +399,6 @@ class ConnectionGuard:
                     f'retrying...',
                     'GUARD'
                 )
-                time.sleep(delay)
         else:
             write_log(
                 'No SmartConnection - cannot rotate',
@@ -414,7 +412,6 @@ class ConnectionGuard:
                 f'Waiting {delay}s before retry...',
                 'GUARD'
             )
-            time.sleep(delay)
 
         # Reset counters after rotation
         self.consecutive_fails = 0
@@ -527,7 +524,6 @@ class GuardedSession:
                         f'{url[:50]}',
                         'GUARD'
                     )
-                    time.sleep(2 * retry_count)
                 else:
                     # Return last response even
                     # if blocked (let agent handle)
@@ -556,7 +552,6 @@ class GuardedSession:
                     )
                     # Refresh session after rotation
                     self.session = self.guard.session
-                    time.sleep(2 * retry_count)
                 else:
                     raise
 

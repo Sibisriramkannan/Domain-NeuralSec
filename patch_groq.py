@@ -101,18 +101,15 @@ class GroqClient:
                     proxy = self._next_proxy()
                     self.session = self._build_session(proxy)
                 elif r.status_code == 429:
-                    time.sleep(30 * attempt)
                 elif r.status_code == 401:
                     raise ValueError("Invalid API key")
                 else:
-                    time.sleep(5 * attempt)
             except ValueError:
                 raise
             except requests.exceptions.SSLError:
                 self.session.verify = False
             except Exception as e:
                 print(f"  {Fore.YELLOW}[!] {e}{Style.RESET_ALL}")
-                time.sleep(5)
         return None
 '''
 

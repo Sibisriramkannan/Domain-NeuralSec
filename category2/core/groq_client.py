@@ -284,7 +284,6 @@ class GroqClient:
                         f"limited. Waiting {wait}s..."
                         + Style.RESET_ALL
                     )
-                    time.sleep(wait)
 
                 # ── 401 BAD KEY ──────────────────
                 elif resp.status_code == 401:
@@ -308,7 +307,6 @@ class GroqClient:
                     last_error = (
                         f"HTTP {resp.status_code}"
                     )
-                    time.sleep(5 * attempt)
 
             except requests.exceptions.SSLError:
                 # Try without SSL verify
@@ -318,7 +316,6 @@ class GroqClient:
                     + Style.RESET_ALL
                 )
                 self.session.verify = False
-                time.sleep(2)
 
             except requests.exceptions.ConnectionError:
                 print(
@@ -336,7 +333,6 @@ class GroqClient:
                     + Style.RESET_ALL
                 )
                 last_error = "Timeout"
-                time.sleep(5)
 
             except ValueError:
                 raise
@@ -347,7 +343,6 @@ class GroqClient:
                     f"  {Fore.RED}[!] Error: {e}"
                     + Style.RESET_ALL
                 )
-                time.sleep(5)
 
         # All retries failed
         print(
@@ -407,4 +402,3 @@ class GroqClient:
                 + Style.RESET_ALL
             )
             self.session = self._build_session()
-            time.sleep(wait)

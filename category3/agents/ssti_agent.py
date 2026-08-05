@@ -126,7 +126,6 @@ class SSTIAgent:
                             f"{Style.RESET_ALL}"
                         )
                         break
-                    time.sleep(0.3)
                 except Exception:
                     pass
 

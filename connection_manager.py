@@ -108,7 +108,6 @@ class TorManager:
 
                 # Wait for Tor to start
                 for i in range(30):
-                    time.sleep(1)
                     if self.is_tor_running():
                         print(
                             f"  {Fore.GREEN}[✓] Tor "
@@ -214,7 +213,6 @@ class TorManager:
             ) as controller:
                 controller.authenticate()
                 controller.signal(Signal.NEWNYM)
-                time.sleep(3)
                 print(
                     f"  {Fore.GREEN}[✓] Tor circuit "
                     f"rotated - new IP assigned"
@@ -230,7 +228,6 @@ class TorManager:
                 f"Tor rotation (10s)..."
                 + Style.RESET_ALL
             )
-            time.sleep(10)
             return True
 
         except Exception as e:
@@ -385,7 +382,6 @@ class ProtonVPNManager:
             + Style.RESET_ALL
         )
         self.disconnect()
-        time.sleep(2)
         return self.connect('random')
 
     def disconnect(self):
@@ -749,8 +745,6 @@ class CloudflareWarpManager:
                 timeout=30
             )
 
-            time.sleep(3)
-
             # Check status
             status = subprocess.run(
                 ['warp-cli', 'status'],
@@ -1079,7 +1073,6 @@ class ConnectionManager:
             self.auto_setup()
 
         # Show new IP
-        time.sleep(2)
         new_ip = self.get_masked_ip()
         print(
             f"  {Fore.GREEN}[✓] New IP: {new_ip} "

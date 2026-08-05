@@ -238,7 +238,6 @@ class GroqClient:
                             f"Waiting {wait}s..."
                             + Style.RESET_ALL
                         )
-                        time.sleep(wait)
 
                 elif r.status_code == 429:
                     wait = 30 * attempt
@@ -248,7 +247,6 @@ class GroqClient:
                         f"Wait {wait}s..."
                         + Style.RESET_ALL
                     )
-                    time.sleep(wait)
 
                 elif r.status_code == 401:
                     print(
@@ -265,11 +263,9 @@ class GroqClient:
                         f"retry {attempt}..."
                         + Style.RESET_ALL
                     )
-                    time.sleep(5 * attempt)
 
             except requests.exceptions.SSLError:
                 self.session.verify = False
-                time.sleep(2)
 
             except (
                 requests.exceptions.ConnectionError,
@@ -280,14 +276,12 @@ class GroqClient:
                     f" - retry {attempt}..."
                     + Style.RESET_ALL
                 )
-                time.sleep(5)
 
             except Exception as e:
                 print(
                     f"  {Fore.RED}[!] Error: {e}"
                     + Style.RESET_ALL
                 )
-                time.sleep(5)
 
         return None
 

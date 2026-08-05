@@ -88,14 +88,12 @@ class StatsCollector:
             interval=None, percpu=True
         )
         self.prev_net_io = psutil.net_io_counters()
-        time.sleep(0.5)
 
         while self._running:
             try:
                 self._update_stats()
             except Exception:
                 pass
-            time.sleep(1.0)
 
     def _update_stats(self):
         self.cpu_percent = psutil.cpu_percent(
@@ -785,7 +783,6 @@ def main():
     )
 
     stats = StatsCollector()
-    time.sleep(1.0)
 
     last_log_size = 0
     last_log_mtime = 0
@@ -813,7 +810,6 @@ def main():
                     pass
 
                 live.update(build_layout(stats))
-                time.sleep(0.5)
 
     except KeyboardInterrupt:
         stats.stop()

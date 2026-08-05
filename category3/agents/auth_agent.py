@@ -189,7 +189,6 @@ class AuthAgent:
                                 f"{username}:{password}"
                                 f"{Style.RESET_ALL}"
                             )
-                        time.sleep(0.5)
                     except Exception:
                         pass
             except Exception:
@@ -263,7 +262,6 @@ class AuthAgent:
                             break
                     except Exception:
                         pass
-                    time.sleep(0.3)
 
                 if not lockout_detected:
                     self.findings.append({
