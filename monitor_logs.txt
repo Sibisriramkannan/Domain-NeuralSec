@@ -1,0 +1,562 @@
+# Scan started: 2026-08-08 07:38:35
+07:38:35 [OK] SEC MONITOR: qterminal
+07:38:35 [OK] Monitor launched via platform_utils (attempt 1)
+07:38:38 [SCAN] Target: https://www.uber.com | Mode: 7 | Conn: tor
+07:38:38 [SCAN] Section: PRE-SCAN SETUP
+07:38:38 [SCAN] Pre-scan: https://www.uber.com
+07:38:38 [CONN] Connection mode: tor
+07:38:38 [SEC] Running risk assessment...
+07:38:38 [SEC] Risk: LOW (1 factors)
+07:38:38 [INFO] Anti-track: OFF
+07:38:38 [CONN] User forced: TOR
+07:38:38 [CONN] Connection setup (risk=LOW mode=tor)
+07:38:38 [CONN] Setting up Tor...
+07:38:38 [CONN] Checking Tor status...
+07:38:38 [CONN] Trying systemctl start tor...
+07:38:48 [CONN] Starting Tor: /usr/sbin/tor
+07:38:50 [OK] Tor started on 9050!
+07:38:50 [CONN] Opening Tor display terminal...
+07:38:50 [OK] TOR ROTATOR: qterminal
+07:38:56 [OK] Tor IP: 193.189.100.200
+07:38:56 [ROTATE] Tor rotation: every 20s
+07:38:56 [OK] Tor ready!
+07:38:56 [CONN] Forced: TOR
+07:38:56 [GUARD] Initializing guard...
+07:38:56 [GUARD] Guard initialized. Method: tor
+07:38:56 [GUARD] Connection guard active (background monitor ON)
+07:38:56 [GUARD] Guard: block=5 timeout=7
+07:38:56 [OK] Setup done: Risk=LOW Conn=tor Mode=tor Guard=True
+07:38:56 [SCAN] Mode: FULL SCAN
+07:38:56 [SCAN] Phase 1: Cat1
+07:38:56 [SCAN] Section: CATEGORY 1 - PASSIVE SECURITY SCAN
+07:38:56 [AGENT] Starting Category 1
+07:38:57 [GUARD] GuardedSession → Cat1
+07:38:57 [AGENT] Cat1: 4 agents parallel...
+07:38:57 [AGENT] Cat1: All 4 agents simultaneous
+07:38:57 [AGENT] [1/4] RECONNAISSANCE
+07:38:57 [AGENT] [STEP 1] Reconnaissance - WHOIS | DNS | Subdomains | Tech | Robots | Paths (0.0s)
+07:38:57 [AGENT] [2/4] SECURITY HEADERS
+07:38:57 [AGENT] [STEP 1] Security Headers - CSP | HSTS | X-Frame | CORS (0.0s)
+07:38:57 [AGENT] [3/4] SSL/TLS
+07:38:57 [AGENT] [4/4] EMAIL SECURITY
+07:38:57 [AGENT] [STEP 1] SSL/TLS - Cert | TLS | Cipher | Vulns (0.0s)
+07:38:57 [AGENT] [STEP 1] Email Security - SPF | DMARC | DKIM | MX (0.0s)
+07:38:57 [INFO] Issuer: DigiCert Global G2 TLS RSA SHA256 2020 CA1
+07:38:57 [OK] ✓ Cert valid: 192 days
+07:38:57 [INFO] TLS: TLSv1.3 Cipher: TLS_AES_256_GCM_SHA384
+07:38:57 [OK] ✓ TLS TLSv1.3 Secure
+07:38:57 [OK] ✓ No SSL issues
+07:38:57 [OK] SSL/TLS DONE → 0 | 0.3s
+07:38:57 [AGENT] Cat1 progress: 1/4 done
+07:38:57 [OK] Cat1 [ssl_tls]: DONE
+07:38:59 [WARN] [HIGH] SPF Missing
+07:38:59 [WARN] [HIGH] DMARC Missing
+07:38:59 [INFO] [MEDIUM] DKIM Not Found
+07:38:59 [WARN] ⚠ MX: No records
+07:38:59 [INFO] Score: 0/100 Grade: F
+07:38:59 [OK] EMAIL SECURITY DONE → 0 | 2.3s
+07:38:59 [AGENT] Cat1 progress: 2/4 done
+07:38:59 [ERROR] Cat1 [email_security]: ERROR
+07:39:03 [OK] ✓ Strict-Transport-Security: Present
+07:39:03 [OK] ✓ Content-Security-Policy: Present
+07:39:03 [OK] ✓ X-Content-Type-Options: Present
+07:39:03 [OK] ✓ X-Frame-Options: Present
+07:39:03 [WARN] ⚠ Missing: X-XSS-Protection [LOW]
+07:39:03 [WARN] ⚠ Missing: Referrer-Policy [MEDIUM]
+07:39:03 [WARN] ⚠ Missing: Permissions-Policy [MEDIUM]
+07:39:03 [OK] ✓ Cache-Control: Present
+07:39:03 [INFO] Score: 62/100 Grade: C
+07:39:03 [INFO] [MEDIUM] Info Disclosed: Server | cloudflare
+07:39:03 [OK] ✓ CORS: OK
+07:39:03 [OK] SECURITY HEADERS DONE → 0 | 5.7s
+07:39:03 [AGENT] Cat1 progress: 3/4 done
+07:39:03 [OK] Cat1 [security_headers]: DONE
+07:39:16 [OK] ✓ No subdomains
+07:39:16 [INFO] [MEDIUM] Exposed: /api/docs | API documentation exposed
+07:39:16 [INFO] Server: cloudflare
+07:39:16 [OK] RECONNAISSANCE DONE → 1 | 19.4s
+07:39:16 [AGENT] Cat1 progress: 4/4 done
+07:39:16 [OK] Cat1 [reconnaissance]: DONE
+07:39:16 [OK] Cat1 COMPLETE: 19s
+07:39:16 [OK] Cat1 done in 19s
+07:39:16 [SCAN] Section: CATEGORY 1 - GENERATING REPORT
+07:39:16 [AGENT] Cat1: Generating report...
+07:39:19 [OK] Cat1: Report done
+07:39:19 [SCAN] Phase 2: Cat2
+07:39:19 [SCAN] Section: CATEGORY 2 - ACTIVE SECURITY SCAN
+07:39:19 [AGENT] Starting Category 2
+07:39:19 [AGENT] Cat2: SQLi|XSS|Path|CORS|GraphQL|JWT|API
+07:39:19 [GUARD] GuardedSession → Cat2
+07:39:19 [AGENT] Cat2: 7 agents parallel...
+07:39:20 [ROTATE] Tor IP → 193.189.100.200 (SAME)
+07:39:24 [AGENT] Cat2: All 7 agents starting parallel
+07:39:25 [AGENT] [1/7] SQL INJECTION
+07:39:25 [AGENT] Cat2: Agent [SQL INJECTION] starting
+07:39:25 [AGENT] [2/7] XSS
+07:39:25 [AGENT] Cat2: Agent [XSS] starting
+07:39:26 [AGENT] [3/7] PATH TRAVERSAL
+07:39:26 [AGENT] Cat2: Agent [PATH TRAVERSAL] starting
+07:39:27 [AGENT] [4/7] CORS
+07:39:27 [AGENT] Cat2: Agent [CORS] starting
+07:39:27 [AGENT] [5/7] GRAPHQL
+07:39:27 [AGENT] Cat2: Agent [GRAPHQL] starting
+07:39:28 [AGENT] [6/7] JWT
+07:39:28 [AGENT] Cat2: Agent [JWT] starting
+07:39:28 [AGENT] [7/7] API SECURITY
+07:39:28 [AGENT] Cat2: Agent [API SECURITY] starting
+07:39:28 [AGENT] [STEP 1] SQL Injection - Error | Time-blind | Union (0.5s)
+07:39:29 [AGENT] [STEP 1] XSS - Reflected | DOM | HTML injection (0.9s)
+07:39:31 [AGENT] [STEP 1] Path Traversal - Unix | Windows | Encoded (1.7s)
+07:39:35 [AGENT] [STEP 1] CORS - Origin reflection | Wildcard | Null | Creds (2.4s)
+07:39:36 [AGENT] [STEP 1] GraphQL - Introspection | Batching | Depth (2.9s)
+07:39:38 [AGENT] [STEP 1] JWT - None alg | Weak secret | RS→HS (3.2s)
+07:39:42 [AGENT] [STEP 1] API - BOLA | Methods | Rate | Version | Sensitive data (3.6s)
+07:39:43 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/graphql
+07:39:43 [BLOCK] Response hint: missing csrf token.
+07:39:44 [ROTATE] Tor IP → 193.189.100.200 (SAME)
+07:39:44 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/graphiql
+07:39:44 [BLOCK] Response hint: missing csrf token.
+07:39:44 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/graphql
+07:39:44 [BLOCK] Response hint: missing csrf token.
+07:39:45 [INFO] Payloads: ' OR 1=1 | ' UNION SELECT | '; SLEEP(5)
+07:39:45 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/v1/graphql
+07:39:45 [BLOCK] Response hint: missing csrf token.
+07:39:45 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/v2/graphql
+07:39:45 [BLOCK] Response hint: missing csrf token.
+07:39:46 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/gql
+07:39:46 [BLOCK] Response hint: missing csrf token.
+07:39:47 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/graph
+07:39:47 [BLOCK] Response hint: missing csrf token.
+07:39:48 [AGENT] Testing Injecting Origin: evil-attacker.com
+07:39:49 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/graphql/console
+07:39:49 [BLOCK] Response hint: missing csrf token.
+07:39:49 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/playground
+07:39:49 [BLOCK] Response hint: missing csrf token.
+07:39:50 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v1/graphql
+07:39:50 [BLOCK] Response hint: missing csrf token.
+07:39:54 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api
+07:39:54 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:39:55 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v1
+07:39:55 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:39:55 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v2
+07:39:55 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:39:56 [GUARD] Guard status: Reqs=38 OK=22 Fail=0 Block=13 Rotations=0
+07:39:59 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/users
+07:39:59 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:00 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/user
+07:40:00 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:00 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/admin
+07:40:00 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:02 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/auth
+07:40:02 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:02 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:40:02 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:03 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/logout
+07:40:03 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:05 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/register
+07:40:05 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:06 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/profile
+07:40:06 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:07 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/products
+07:40:07 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:08 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/orders
+07:40:08 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:09 [ROTATE] Tor IP → 193.189.100.200 (SAME)
+07:40:10 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/docs
+07:40:10 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:11 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/swagger
+07:40:11 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:11 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/health
+07:40:11 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:12 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/status
+07:40:12 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:13 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/config
+07:40:13 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:14 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/settings
+07:40:14 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:27 [OK] ✓ No GraphQL issues
+07:40:33 [ROTATE] Tor IP → 193.189.100.200 (SAME)
+07:40:34 [OK] ✓ No JWT issues
+07:40:34 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api
+07:40:34 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:35 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api
+07:40:35 [BLOCK] Response hint: missing csrf token.
+07:40:35 [OK] GRAPHQL DONE → 0 | 59.5s
+07:40:35 [OK] Cat2 [graphql]: clean | 59.5s
+07:40:35 [AGENT] Cat2 progress: 1/7 done
+07:40:36 [OK] JWT DONE → 0 | 66.3s
+07:40:36 [OK] Cat2 [jwt]: clean | 66.3s
+07:40:36 [AGENT] Cat2 progress: 2/7 done
+07:40:36 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api
+07:40:36 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:37 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api
+07:40:37 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:38 [OK] ✓ No SQLi found
+07:40:38 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api
+07:40:38 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:38 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api
+07:40:38 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:39 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api
+07:40:39 [BLOCK] Response hint: 
+07:40:40 [BLOCK] FIREWALL BLOCK [405] URL:https://www.uber.com/api
+07:40:40 [BLOCK] Response hint: <html>
+<head><title>405 not allowed</title></head>
+<body>
+<center><h1>405 not allowed</h1></cente
+07:40:40 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v1
+07:40:40 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:41 [OK] SQL INJECTION DONE → 0 | 72.7s
+07:40:41 [OK] Cat2 [sql_injection]: clean | 72.7s
+07:40:41 [AGENT] Cat2 progress: 3/7 done
+07:40:41 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v1
+07:40:41 [BLOCK] Response hint: missing csrf token.
+07:40:41 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v1
+07:40:41 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:42 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v1
+07:40:42 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:42 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v1
+07:40:42 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:42 [BLOCK] BLOCK DETECTED: Block threshold reached (5/5) - Auto rotating...
+07:40:42 [ROTATE] Rotating connection... #1
+07:40:42 [ROTATE] Rotating from tor
+07:40:45 [ROTATE] Tor circuit rotated
+07:40:45 [ROTATE] Rotated to TOR
+07:40:47 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v1
+07:40:47 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:47 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v1
+07:40:47 [BLOCK] Response hint: 
+07:40:48 [BLOCK] FIREWALL BLOCK [405] URL:https://www.uber.com/api/v1
+07:40:48 [BLOCK] Response hint: <html>
+<head><title>405 not allowed</title></head>
+<body>
+<center><h1>405 not allowed</h1></cente
+07:40:50 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v2
+07:40:50 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:50 [OK] ✓ CORS OK
+07:40:50 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v2
+07:40:50 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:50 [BLOCK] BLOCK DETECTED: Block threshold reached (5/5) - Auto rotating...
+07:40:51 [ROTATE] Rotating connection... #2
+07:40:51 [ROTATE] Rotating from tor
+07:40:51 [OK] ✓ No PathTraversal
+07:40:52 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com
+07:40:52 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:54 [ROTATE] Tor circuit rotated
+07:40:54 [ROTATE] Rotated to TOR
+07:40:54 [OK] CORS DONE → 0 | 83.6s
+07:40:54 [OK] Cat2 [cors]: clean | 83.6s
+07:40:54 [AGENT] Cat2 progress: 4/7 done
+07:40:54 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v2
+07:40:54 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:55 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v2
+07:40:55 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:55 [OK] PATH TRAVERSAL DONE → 0 | 85.1s
+07:40:55 [OK] Cat2 [path_traversal]: clean | 85.1s
+07:40:55 [AGENT] Cat2 progress: 5/7 done
+07:40:55 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v2
+07:40:55 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:56 [OK] ✓ No XSS found
+07:40:56 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v2
+07:40:56 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:40:56 [BLOCK] BLOCK DETECTED: Block threshold reached (5/5) - Auto rotating...
+07:40:56 [ROTATE] Rotating connection... #3
+07:40:56 [ROTATE] Rotating from tor
+07:40:56 [GUARD] Guard status: Reqs=121 OK=69 Fail=0 Block=52 Rotations=3
+07:40:57 [OK] XSS DONE → 0 | 90.5s
+07:40:57 [OK] Cat2 [xss]: clean | 90.5s
+07:40:57 [AGENT] Cat2 progress: 6/7 done
+07:40:58 [ROTATE] Tor IP → 185.220.101.17 (NEW)
+07:40:59 [ROTATE] Tor circuit rotated
+07:41:00 [ROTATE] Rotated to TOR
+07:41:00 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/v2
+07:41:00 [BLOCK] Response hint: 
+07:41:01 [BLOCK] FIREWALL BLOCK [405] URL:https://www.uber.com/api/v2
+07:41:01 [BLOCK] Response hint: <html>
+<head><title>405 not allowed</title></head>
+<body>
+<center><h1>405 not allowed</h1></cente
+07:41:22 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/users
+07:41:22 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:41:23 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/users
+07:41:23 [BLOCK] Response hint: missing csrf token.
+07:41:24 [ROTATE] Tor IP → 109.70.100.15 (NEW)
+07:41:31 [WARN] Timeout [PUT] https://www.uber.com/api/users - SOCKSHTTPSConnectionPool(host='www.uber.com', port=443): Read timed out. (read timeout=8)
+07:41:33 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/users
+07:41:33 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:41:34 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/users
+07:41:34 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:41:34 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/users
+07:41:34 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:41:35 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/users
+07:41:35 [BLOCK] Response hint: 
+07:41:36 [BLOCK] FIREWALL BLOCK [405] URL:https://www.uber.com/api/users
+07:41:36 [BLOCK] Response hint: <html>
+<head><title>405 not allowed</title></head>
+<body>
+<center><h1>405 not allowed</h1></cente
+07:41:36 [BLOCK] BLOCK DETECTED: Block threshold reached (5/5) - Auto rotating...
+07:41:36 [ROTATE] Rotating connection... #4
+07:41:36 [ROTATE] Rotating from tor
+07:41:39 [ROTATE] Tor circuit rotated
+07:41:39 [ROTATE] Rotated to TOR
+07:41:41 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/user
+07:41:41 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:41:41 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/user
+07:41:41 [BLOCK] Response hint: missing csrf token.
+07:41:42 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/user
+07:41:42 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:41:42 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/user
+07:41:42 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:41:43 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/user
+07:41:43 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:41:43 [BLOCK] BLOCK DETECTED: Block threshold reached (5/5) - Auto rotating...
+07:41:43 [ROTATE] Rotating connection... #5
+07:41:43 [ROTATE] Rotating from tor
+07:41:46 [ROTATE] Tor circuit rotated
+07:41:46 [ROTATE] Rotated to TOR
+07:41:46 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/user
+07:41:46 [BLOCK] Response hint: <html>
+<head><title>403 forbidden</title></head>
+<body>
+<center><h1>403 forbidden</h1></center>
+
+07:41:47 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/user
+07:41:47 [BLOCK] Response hint: 
+07:41:47 [BLOCK] FIREWALL BLOCK [405] URL:https://www.uber.com/api/user
+07:41:47 [BLOCK] Response hint: <html>
+<head><title>405 not allowed</title></head>
+<body>
+<center><h1>405 not allowed</h1></cente
+07:41:49 [ROTATE] Tor IP → 185.220.101.40 (NEW)
+07:41:51 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:41:51 [BLOCK] Response hint: missing csrf token.
+07:41:52 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:41:52 [BLOCK] Response hint: missing csrf token.
+07:41:52 [BLOCK] BLOCK DETECTED: Block threshold reached (5/5) - Auto rotating...
+07:41:52 [ROTATE] Rotating connection... #6
+07:41:52 [ROTATE] Rotating from tor
+07:41:55 [ROTATE] Tor circuit rotated
+07:41:55 [ROTATE] Rotated to TOR
+07:41:56 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:41:56 [BLOCK] Response hint: missing csrf token.
+07:41:56 [GUARD] Guard status: Reqs=143 OK=69 Fail=0 Block=72 Rotations=6
+07:41:57 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:41:57 [BLOCK] Response hint: missing csrf token.
+07:41:58 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:41:58 [BLOCK] Response hint: missing csrf token.
+07:41:58 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:41:58 [BLOCK] Response hint: missing csrf token.
+07:41:59 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:41:59 [BLOCK] Response hint: missing csrf token.
+07:41:59 [BLOCK] BLOCK DETECTED: Block threshold reached (5/5) - Auto rotating...
+07:41:59 [ROTATE] Rotating connection... #7
+07:41:59 [ROTATE] Rotating from tor
+07:42:03 [ROTATE] Tor circuit rotated
+07:42:03 [ROTATE] Rotated to TOR
+07:42:04 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:42:04 [BLOCK] Response hint: missing csrf token.
+07:42:05 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:42:05 [BLOCK] Response hint: missing csrf token.
+07:42:06 [BLOCK] FIREWALL BLOCK [403] URL:https://www.uber.com/api/login
+07:42:06 [BLOCK] Response hint: missing csrf token.
+07:42:07 [WARN] [HIGH] Missing Rate Limiting | No rate limiting on login. 10 requests with no 429
+07:42:07 [OK] API SECURITY DONE → 1 | 158.7s
+07:42:07 [WARN] Cat2 [api]: 1 findings | 158.7s
+07:42:07 [AGENT] Cat2 progress: 7/7 done
+07:42:07 [OK] Cat2 COMPLETE: 1 findings in 162s
+07:42:08 [OK] Cat2 [sql_injection]: 0 findings
+07:42:08 [OK] Cat2 [xss]: 0 findings
+07:42:08 [OK] Cat2 [path_traversal]: 0 findings
+07:42:08 [OK] Cat2 [cors]: 0 findings
+07:42:08 [OK] Cat2 [graphql]: 0 findings
+07:42:08 [OK] Cat2 [jwt]: 0 findings
+07:42:08 [WARN] Cat2 [api]: 1 findings
+07:42:08 [OK] Cat2 done in 169s
+07:42:09 [SCAN] Section: CATEGORY 2 - GENERATING REPORT
+07:42:09 [AGENT] Cat2: Generating report...
+07:42:13 [OK] Cat2: Report done
+07:42:13 [SCAN] Phase 3: Cat3
+07:42:14 [SCAN] Section: CATEGORY 3 - ADVANCED SECURITY SCAN
+07:42:14 [AGENT] Starting Category 3
+07:42:14 [AGENT] Cat3: Auth|Cmd|Upload|SSRF|XXE|NoSQL|SSTI|CSRF|WS|Host|Cache|OAuth|Proto|Access
+07:42:14 [GUARD] GuardedSession → Cat3
+07:42:14 [AGENT] Cat3: 14 agents (2seq+12parallel)...
+07:42:14 [ROTATE] Tor IP → 51.195.91.124 (NEW)
+07:42:39 [ROTATE] Tor IP → 51.195.91.124 (SAME)
+07:42:56 [GUARD] Guard status: Reqs=149 OK=69 Fail=0 Block=79 Rotations=7

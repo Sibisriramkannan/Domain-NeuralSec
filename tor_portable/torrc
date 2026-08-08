@@ -1,0 +1,7 @@
+SocksPort 9050
+ControlPort 9051
+DataDirectory /home/culprit/Downloads/Security Scanner agent/tor_portable/data
+CookieAuthentication 0
+MaxCircuitDirtiness 20
+NewCircuitPeriod 15
+CircuitBuildTimeout 10

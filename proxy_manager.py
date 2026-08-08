@@ -1,4 +1,4 @@
-# proxy_manager.py - Add to your project root
+# proxy_manager.py - Updated with logging support
 
 import requests
 import random
@@ -12,14 +12,35 @@ class FreeProxyManager:
     from public proxy lists
     """
 
-    def __init__(self):
+    def __init__(self, log_writer=None):
         self.proxies = []
         self.working_proxies = []
         self.current_index = 0
+        self.log_writer = log_writer  # ✅ NEW
+
+    def _w(self, msg, lvl='INFO'):
+        """Write to log + print."""
+        # Print to terminal
+        prefix = {
+            'INFO': '  [*]',
+            'SUCCESS': '  [✓]',
+            'WARN': '  [!]',
+            'ERROR': '  [!]',
+        }.get(lvl, '  [*]')
+        print(f"{prefix} {msg}")
+
+        # Also write to monitor log
+        if self.log_writer:
+            try:
+                self.log_writer(
+                    f"[PROXY] {msg}", lvl
+                )
+            except:
+                pass
 
     def fetch_proxies(self):
-        """Fetch proxies from multiple free sources"""
-        print("  [*] Fetching free proxies...")
+        """Fetch proxies from multiple sources."""
+        self._w('Fetching free proxies...', 'INFO')
         all_proxies = []
 
         # Source 1: free-proxy-list.net
@@ -43,14 +64,19 @@ class FreeProxyManager:
                             all_proxies.append(
                                 f"http://{ip}:{port}"
                             )
-            print(
-                f"  [✓] Source 1: "
-                f"{len(all_proxies)} proxies"
+            self._w(
+                f'Source 1 (free-proxy-list): '
+                f'{len(all_proxies)} proxies',
+                'SUCCESS'
             )
         except Exception as e:
-            print(f"  [!] Source 1 failed: {e}")
+            self._w(
+                f'Source 1 failed: {e}', 'WARN'
+            )
 
-        # Source 2: proxylist.geonode.com (API)
+        prev = len(all_proxies)
+
+        # Source 2: geonode API
         try:
             resp = requests.get(
                 'https://proxylist.geonode.com/api/'
@@ -68,14 +94,19 @@ class FreeProxyManager:
                     all_proxies.append(
                         f"http://{ip}:{port}"
                     )
-            print(
-                f"  [✓] Source 2: "
-                f"geonode proxies added"
+            added = len(all_proxies) - prev
+            self._w(
+                f'Source 2 (geonode): '
+                f'{added} proxies added',
+                'SUCCESS'
             )
+            prev = len(all_proxies)
         except Exception as e:
-            print(f"  [!] Source 2 failed: {e}")
+            self._w(
+                f'Source 2 failed: {e}', 'WARN'
+            )
 
-        # Source 3: proxyscrape API (free)
+        # Source 3: proxyscrape API
         try:
             resp = requests.get(
                 'https://api.proxyscrape.com/v2/'
@@ -89,18 +120,23 @@ class FreeProxyManager:
             )
             for line in resp.text.strip().split('\n'):
                 line = line.strip()
-                if ':' in line:
+                if ':' in line and len(line) < 25:
                     all_proxies.append(
                         f"http://{line}"
                     )
-            print(
-                f"  [✓] Source 3: "
-                f"proxyscrape added"
+            added = len(all_proxies) - prev
+            self._w(
+                f'Source 3 (proxyscrape): '
+                f'{added} proxies added',
+                'SUCCESS'
             )
+            prev = len(all_proxies)
         except Exception as e:
-            print(f"  [!] Source 3 failed: {e}")
+            self._w(
+                f'Source 3 failed: {e}', 'WARN'
+            )
 
-        # Source 4: github proxy list
+        # Source 4: GitHub proxy list
         try:
             resp = requests.get(
                 'https://raw.githubusercontent.com/'
@@ -110,26 +146,32 @@ class FreeProxyManager:
             )
             for line in resp.text.strip().split('\n'):
                 line = line.strip()
-                if ':' in line:
+                if ':' in line and len(line) < 25:
                     all_proxies.append(
                         f"http://{line}"
                     )
-            print(
-                f"  [✓] Source 4: "
-                f"github list added"
+            added = len(all_proxies) - prev
+            self._w(
+                f'Source 4 (GitHub): '
+                f'{added} proxies added',
+                'SUCCESS'
             )
         except Exception as e:
-            print(f"  [!] Source 4 failed: {e}")
+            self._w(
+                f'Source 4 failed: {e}', 'WARN'
+            )
 
+        # Deduplicate
         self.proxies = list(set(all_proxies))
-        print(
-            f"  [✓] Total proxies fetched: "
-            f"{len(self.proxies)}"
+        self._w(
+            f'Total unique proxies: '
+            f'{len(self.proxies)}',
+            'SUCCESS'
         )
         return self.proxies
 
     def test_proxy(self, proxy, timeout=5):
-        """Test if a proxy is working"""
+        """Test if proxy works."""
         try:
             resp = requests.get(
                 'https://httpbin.org/ip',
@@ -149,10 +191,11 @@ class FreeProxyManager:
     def find_working_proxies(
         self, max_test=30, need=5
     ):
-        """Test proxies and collect working ones"""
-        print(
-            f"  [*] Testing proxies "
-            f"(need {need} working)..."
+        """Test proxies, collect working ones."""
+        self._w(
+            f'Testing proxies '
+            f'(need={need} max_test={max_test})...',
+            'INFO'
         )
         random.shuffle(self.proxies)
         tested = 0
@@ -170,30 +213,28 @@ class FreeProxyManager:
             if working:
                 self.working_proxies.append(proxy)
                 found += 1
-                print(
-                    f"  [✓] Working proxy "
-                    f"#{found}: {proxy} "
-                    f"→ IP: {ip}"
+                self._w(
+                    f'Working #{found}: '
+                    f'{proxy[:40]} → {ip}',
+                    'SUCCESS'
                 )
-            else:
-                print(
-                    f"  [~] Dead: {proxy[:30]}..."
-                )
+            # Silent on dead - reduce noise
 
-        print(
-            f"  [✓] Found {len(self.working_proxies)}"
-            f" working proxies"
+        self._w(
+            f'Working proxies: '
+            f'{len(self.working_proxies)}',
+            'SUCCESS'
         )
         return self.working_proxies
 
     def get_random_proxy(self):
-        """Get a random working proxy"""
+        """Get random working proxy."""
         if not self.working_proxies:
             return None
         return random.choice(self.working_proxies)
 
     def get_next_proxy(self):
-        """Rotate through working proxies"""
+        """Rotate through working proxies."""
         if not self.working_proxies:
             return None
         proxy = self.working_proxies[
@@ -204,18 +245,54 @@ class FreeProxyManager:
         return proxy
 
     def remove_proxy(self, proxy):
-        """Remove a dead proxy"""
+        """Remove dead proxy."""
         if proxy in self.working_proxies:
             self.working_proxies.remove(proxy)
-            print(
-                f"  [!] Removed dead proxy: "
-                f"{proxy[:30]}"
+            self._w(
+                f'Removed dead: {proxy[:35]}',
+                'WARN'
             )
 
+    def rotate_on_block(self):
+        """
+        Called when current proxy is blocked.
+        Returns next working proxy or None.
+        """
+        # Mark current as failed
+        if self.working_proxies:
+            current_idx = (
+                (self.current_index - 1)
+                % len(self.working_proxies)
+            )
+            dead = self.working_proxies[current_idx]
+            self.remove_proxy(dead)
+
+        # Get next
+        next_proxy = self.get_next_proxy()
+        if next_proxy:
+            self._w(
+                f'Rotated to: {next_proxy[:40]}',
+                'INFO'
+            )
+        else:
+            self._w(
+                'No more working proxies!',
+                'WARN'
+            )
+        return next_proxy
+
     def setup(self, need=5):
-        """Full setup - fetch and test"""
+        """Full setup - fetch and test."""
         self.fetch_proxies()
         self.find_working_proxies(
             max_test=50, need=need
         )
         return len(self.working_proxies) > 0
+
+    def get_stats(self):
+        """Return current stats."""
+        return {
+            'total_fetched': len(self.proxies),
+            'working': len(self.working_proxies),
+            'current_index': self.current_index,
+        }

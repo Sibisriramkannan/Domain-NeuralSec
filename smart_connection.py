@@ -1,511 +1,478 @@
 """
-Smart Connection Manager
-Automatically selects best connection method
-based on target risk and connectivity tests.
+Smart Connection Manager - Cross Platform
+QTerminal + Windows + Linux + macOS
+Direct → Proxy → Tor (auto-detect + launch)
 """
 
+import os
+import sys
 import time
-import requests
+import random
 import socket
-from colorama import Fore, Style, init
+import threading
+import requests
+from colorama import Fore, Style
 
-init(autoreset=True)
+try:
+    from proxy_manager import FreeProxyManager
+    HAS_PROXY_MGR = True
+except:
+    HAS_PROXY_MGR = False
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
+]
+
+TOR_SOCKS_PORTS = [9150, 9050]
+TOR_CONTROL_PORTS = [9151, 9051]
+
+
+def is_port_open(port):
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        r = s.connect_ex(('127.0.0.1', port))
+        s.close()
+        return r == 0
+    except:
+        return False
+
+
+def random_headers():
+    return {
+        'User-Agent': random.choice(USER_AGENTS),
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'DNT': '1',
+    }
+
+
+def find_tor_socks_port():
+    for p in TOR_SOCKS_PORTS:
+        if is_port_open(p):
+            return p
+    return None
+
+
+def find_tor_control_port():
+    for p in TOR_CONTROL_PORTS:
+        if is_port_open(p):
+            return p
+    return None
+
+
+class TorManager:
+    def __init__(self, log_writer=None):
+        self.log = log_writer
+        self.active_port = None
+        self.control_port = None
+        self.tor_process = None
+        self.display_process = None
+        self.session = None
+        self.current_ip = None
+        self._rotating = False
+        self._rotate_thread = None
+
+    def _w(self, msg, lvl='INFO'):
+        if self.log:
+            try:
+                self.log(msg, lvl)
+            except:
+                pass
+
+    def _find_tor_binary(self):
+        import shutil
+        import platform as plat
+
+        paths = []
+        os_name = plat.system()
+        tor_dir = os.path.join(BASE_DIR, 'tor_portable')
+
+        if os_name == 'Windows':
+            paths += [
+                os.path.join(tor_dir, 'tor', 'tor.exe'),
+                os.path.join(tor_dir, 'Tor', 'tor.exe'),
+            ]
+            user = os.getenv('USERNAME', '')
+            paths += [
+                rf'C:\Users\{user}\Desktop\Tor Browser\Browser\TorBrowser\Tor\tor.exe',
+                r'C:\Program Files\Tor Browser\Browser\TorBrowser\Tor\tor.exe',
+            ]
+        elif os_name == 'Darwin':
+            paths += [
+                '/Applications/Tor Browser.app/Contents/MacOS/Tor/tor',
+                '/usr/local/bin/tor',
+                '/opt/homebrew/bin/tor',
+            ]
+        else:
+            paths += [
+                '/usr/bin/tor',
+                '/usr/local/bin/tor',
+                os.path.join(tor_dir, 'tor', 'tor'),
+            ]
+
+        w = shutil.which('tor')
+        if w:
+            paths.insert(0, w)
+
+        for p in paths:
+            if os.path.exists(p):
+                return p
+        return None
+
+    def _generate_torrc(self):
+        tor_dir = os.path.join(BASE_DIR, 'tor_portable')
+        os.makedirs(tor_dir, exist_ok=True)
+        data_dir = os.path.join(tor_dir, 'data')
+        os.makedirs(data_dir, exist_ok=True)
+        torrc = os.path.join(tor_dir, 'torrc')
+        dd = data_dir.replace('\\', '/')
+        config = (
+            f"SocksPort 9050\n"
+            f"ControlPort 9051\n"
+            f"DataDirectory {dd}\n"
+            f"CookieAuthentication 0\n"
+            f"MaxCircuitDirtiness 20\n"
+            f"NewCircuitPeriod 15\n"
+            f"CircuitBuildTimeout 10\n"
+        )
+        with open(torrc, 'w') as f:
+            f.write(config)
+        return torrc
+
+    def check_running(self):
+        port = find_tor_socks_port()
+        if port:
+            self.active_port = port
+            self.control_port = find_tor_control_port()
+            return True
+        return False
+
+    def start_tor(self):
+        import subprocess as sp
+
+        self._w('Checking Tor status...', 'CONNECT')
+
+        if self.check_running():
+            self._w(f'Tor running on {self.active_port}', 'SUCCESS')
+            return True
+
+        # Linux: try systemctl
+        import platform as plat
+        if plat.system() == 'Linux':
+            self._w('Trying systemctl start tor...', 'CONNECT')
+            try:
+                sp.run(['sudo', 'systemctl', 'start', 'tor'], capture_output=True, timeout=10)
+                time.sleep(3)
+                if self.check_running():
+                    self._w('Tor service started!', 'SUCCESS')
+                    return True
+            except:
+                pass
+
+        tor_exe = self._find_tor_binary()
+        if not tor_exe:
+            self._w('Tor binary not found!', 'ERROR')
+            return False
+
+        self._w(f'Starting Tor: {tor_exe}', 'CONNECT')
+        torrc = self._generate_torrc()
+        tor_dir = os.path.join(BASE_DIR, 'tor_portable')
+
+        try:
+            self.tor_process = sp.Popen(
+                [tor_exe, '-f', torrc],
+                stdout=sp.PIPE, stderr=sp.PIPE,
+                cwd=tor_dir
+            )
+            for i in range(60):
+                time.sleep(1)
+                if is_port_open(9050):
+                    self.active_port = 9050
+                    self.control_port = find_tor_control_port()
+                    self._w('Tor started on 9050!', 'SUCCESS')
+                    return True
+                if (i + 1) % 10 == 0:
+                    self._w(f'Connecting... {i+1}/60s', 'CONNECT')
+                if self.tor_process.poll() is not None:
+                    err = self.tor_process.stderr.read().decode()[:150]
+                    self._w(f'Tor died: {err}', 'ERROR')
+                    return False
+            self._w('Tor timeout (60s)', 'ERROR')
+            return False
+        except Exception as e:
+            self._w(f'Tor start error: {e}', 'ERROR')
+            return False
+
+    def launch_display(self, interval=20):
+        tor_mgr_path = os.path.join(BASE_DIR, 'tor_manager.py')
+        if not os.path.exists(tor_mgr_path):
+            self._w('tor_manager.py not found', 'WARN')
+            return
+        self._w('Opening Tor display terminal...', 'CONNECT')
+        try:
+            from platform_utils import launch_in_terminal
+            self.display_process = launch_in_terminal(
+                script_path=tor_mgr_path,
+                title='TOR ROTATOR',
+                args=[f'--interval={interval}', '--display-only'],
+                cwd=BASE_DIR,
+                log_writer=self.log
+            )
+        except Exception as e:
+            self._w(f'Tor display error: {e}', 'WARN')
+
+    def _make_session(self):
+        sess = requests.Session()
+        proxy = f"socks5h://127.0.0.1:{self.active_port}"
+        sess.proxies = {'http': proxy, 'https': proxy}
+        sess.headers.update(random_headers())
+        return sess
+
+    def _rotate_circuit(self):
+        cp = self.control_port
+        if not cp:
+            return False
+        try:
+            from stem import Signal
+            from stem.control import Controller
+            with Controller.from_port(port=cp) as c:
+                c.authenticate()
+                c.signal(Signal.NEWNYM)
+                return True
+        except:
+            pass
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(3)
+            s.connect(('127.0.0.1', cp))
+            s.send(b'AUTHENTICATE\r\n')
+            r = s.recv(256)
+            if b'250' in r:
+                s.send(b'SIGNAL NEWNYM\r\n')
+                r = s.recv(256)
+                s.close()
+                return b'250' in r
+            s.close()
+        except:
+            pass
+        return False
+
+    def _get_ip(self, sess=None):
+        s = sess or self.session
+        if not s:
+            return 'Unknown'
+        for url in ['https://api.ipify.org', 'https://icanhazip.com']:
+            try:
+                r = s.get(url, timeout=10)
+                if r.status_code == 200:
+                    return r.text.strip()
+            except:
+                continue
+        return 'Unknown'
+
+    def start_bg_rotation(self, interval=20):
+        self._rotating = True
+
+        def _loop():
+            self._w(f'Tor rotation: every {interval}s', 'ROTATE')
+            while self._rotating:
+                time.sleep(interval)
+                if not self._rotating:
+                    break
+                try:
+                    if not self._rotate_circuit():
+                        if self.session:
+                            self.session.close()
+                        time.sleep(2)
+                        self.session = self._make_session()
+                    time.sleep(3)
+                    old = self.current_ip
+                    new = self._get_ip()
+                    self.current_ip = new
+                    st = 'NEW' if new != old else 'SAME'
+                    self._w(f'Tor IP → {new} ({st})', 'ROTATE')
+                except Exception as e:
+                    self._w(f'Rotation error: {e}', 'ERROR')
+
+        self._rotate_thread = threading.Thread(target=_loop, daemon=True)
+        self._rotate_thread.start()
+
+    def get_session(self, interval=20):
+        if not self.start_tor():
+            return None
+        self.launch_display(interval)
+        time.sleep(1)
+        self.session = self._make_session()
+        try:
+            ip = self._get_ip()
+            self.current_ip = ip
+            self._w(f'Tor IP: {ip}', 'SUCCESS')
+        except Exception as e:
+            self._w(f'Tor verify failed: {e}', 'WARN')
+            return None
+        self.start_bg_rotation(interval)
+        return self.session
+
+    def stop(self):
+        self._rotating = False
+        if self.tor_process:
+            try:
+                self.tor_process.terminate()
+                self.tor_process.wait(timeout=5)
+            except:
+                try:
+                    self.tor_process.kill()
+                except:
+                    pass
+        if self.display_process:
+            try:
+                self.display_process.terminate()
+            except:
+                pass
 
 
 class SmartConnection:
-    """
-    Automatically determines best connection method.
-
-    Logic:
-    1. Test direct connection to target
-    2. If blocked/slow → try proxy
-    3. If proxy fails → try Tor
-    4. Risk level determines aggressiveness
-    """
-
-    def __init__(self, target, risk_level='LOW'):
-        self.target = (
-            target
-            .replace('https://', '')
-            .replace('http://', '')
-            .strip('/')
-        )
-        self.risk_level = risk_level
+    def __init__(self, target, risk_level='LOW', log_writer=None):
+        self.target = target
+        self.risk = risk_level
+        self.log_writer = log_writer
         self.selected_method = 'direct'
-        self.session = None
-        self.connection_info = {}
+        self.proxy_mgr = None
+        self.tor_mgr = TorManager(log_writer=log_writer)
+        self._session = None
 
-    def _test_direct(self):
-        """Test direct connection to target."""
-        print(
-            f"  {Fore.CYAN}[*] Testing direct "
-            "connection..."
-            + Style.RESET_ALL
-        )
+    def _w(self, msg, lvl='INFO'):
+        if self.log_writer:
+            try:
+                self.log_writer(msg, lvl)
+            except:
+                pass
+
+    def _direct_session(self):
+        sess = requests.Session()
+        sess.headers.update(random_headers())
+        return sess
+
+    def _proxy_session(self):
+        self._w('Fetching proxies...', 'CONNECT')
         try:
-            start = time.time()
-            r = requests.get(
-                f'https://{self.target}',
-                timeout=8,
-                headers={
-                    'User-Agent': (
-                        'Mozilla/5.0 '
-                        '(Windows NT 10.0; Win64; x64)'
-                    )
-                }
-            )
-            elapsed = round(time.time() - start, 2)
-
-            if r.status_code < 500:
-                print(
-                    f"  {Fore.GREEN}[✓] Direct OK "
-                    f"[{r.status_code}] "
-                    f"{elapsed}s"
-                    + Style.RESET_ALL
-                )
-                return True, elapsed
+            if HAS_PROXY_MGR:
+                mgr = FreeProxyManager(log_writer=self.log_writer)
+                mgr.fetch_proxies()
+                working = mgr.find_working_proxies(need=3, max_test=20)
+                if working:
+                    proxy = mgr.get_next_proxy()
+                    sess = requests.Session()
+                    sess.proxies = {'http': proxy, 'https': proxy}
+                    sess.headers.update(random_headers())
+                    self.proxy_mgr = mgr
+                    self._w(f'Proxy: {proxy[:40]}', 'SUCCESS')
+                    return sess
             else:
-                print(
-                    f"  {Fore.YELLOW}[!] Direct weak "
-                    f"[{r.status_code}]"
-                    + Style.RESET_ALL
+                resp = requests.get(
+                    'https://api.proxyscrape.com/v2/?request=getproxies&protocol=http&timeout=5000&country=all',
+                    timeout=10
                 )
-                return False, elapsed
-
-        except requests.exceptions.ConnectionError:
-            print(
-                f"  {Fore.RED}[✗] Direct blocked"
-                + Style.RESET_ALL
-            )
-            return False, 999
+                proxies = [f"http://{l.strip()}" for l in resp.text.split('\n') if ':' in l and len(l) < 25]
+                random.shuffle(proxies)
+                for proxy in proxies[:10]:
+                    try:
+                        sess = requests.Session()
+                        sess.proxies = {'http': proxy, 'https': proxy}
+                        sess.headers.update(random_headers())
+                        r = sess.get('https://api.ipify.org', timeout=5)
+                        if r.status_code == 200:
+                            self._w(f'Proxy: {proxy}', 'SUCCESS')
+                            return sess
+                    except:
+                        continue
         except Exception as e:
-            print(
-                f"  {Fore.RED}[✗] Direct failed: {e}"
-                + Style.RESET_ALL
-            )
-            return False, 999
+            self._w(f'Proxy failed: {e}', 'WARN')
+        return None
 
-    def _test_proxy(self):
-        """Try to get a working proxy."""
-        print(
-            f"  {Fore.CYAN}[*] Testing proxy "
-            "connection..."
-            + Style.RESET_ALL
-        )
+    def _tor_session(self):
+        self._w('Setting up Tor...', 'CONNECT')
+        sess = self.tor_mgr.get_session(interval=20)
+        if sess:
+            self._w('Tor ready!', 'SUCCESS')
+        else:
+            self._w('Tor failed', 'WARN')
+        return sess
+
+    def _test_session(self, sess):
         try:
-            from proxy_manager import FreeProxyManager
-            pm = FreeProxyManager()
-            pm.fetch_proxies()
-            proxies = pm.find_working_proxies(
-                max_proxies=3
-            )
-            if proxies:
-                proxy = proxies[0]
-                print(
-                    f"  {Fore.GREEN}[✓] Proxy found: "
-                    f"{proxy}"
-                    + Style.RESET_ALL
-                )
-                session = requests.Session()
-                session.proxies = {
-                    'http': f'http://{proxy}',
-                    'https': f'http://{proxy}',
-                }
-                return True, session, proxy
-            else:
-                print(
-                    f"  {Fore.YELLOW}[!] No working "
-                    "proxies found"
-                    + Style.RESET_ALL
-                )
-                return False, None, None
-        except ImportError:
-            print(
-                f"  {Fore.YELLOW}[!] proxy_manager "
-                "not available"
-                + Style.RESET_ALL
-            )
-            return False, None, None
-        except Exception as e:
-            print(
-                f"  {Fore.RED}[✗] Proxy failed: {e}"
-                + Style.RESET_ALL
-            )
-            return False, None, None
-
-    def _test_tor(self):
-        """Try Tor connection."""
-        print(
-            f"  {Fore.CYAN}[*] Testing Tor "
-            "connection..."
-            + Style.RESET_ALL
-        )
-        try:
-            session = requests.Session()
-            session.proxies = {
-                'http': 'socks5h://127.0.0.1:9050',
-                'https': 'socks5h://127.0.0.1:9050',
-            }
-            r = session.get(
-                'https://check.torproject.org',
-                timeout=10
-            )
-            if 'Congratulations' in r.text:
-                print(
-                    f"  {Fore.GREEN}[✓] Tor connected"
-                    + Style.RESET_ALL
-                )
-                return True, session
-            else:
-                print(
-                    f"  {Fore.YELLOW}[!] Tor port open"
-                    " but not routing"
-                    + Style.RESET_ALL
-                )
-                return False, None
-        except Exception as e:
-            print(
-                f"  {Fore.YELLOW}[!] Tor not "
-                f"available: {e}"
-                + Style.RESET_ALL
-            )
-            return False, None
-
-    def _make_direct_session(self):
-        """Make a plain requests session."""
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': (
-                'Mozilla/5.0 '
-                '(Windows NT 10.0; Win64; x64) '
-                'AppleWebKit/537.36'
-            )
-        })
-        return session
+            r = sess.get('https://api.ipify.org', timeout=8)
+            return r.status_code == 200
+        except:
+            return False
 
     def get_session(self):
-        """
-        Main method.
-        Returns best session based on risk + connectivity.
-        """
-        print(
-            f"\n{Fore.CYAN}[*] Smart Connection "
-            f"Analysis (Risk: {self.risk_level})"
-            + Style.RESET_ALL
-        )
-        print(
-            f"{Fore.CYAN}" + "─" * 40
-            + Style.RESET_ALL
-        )
+        if self.risk == 'HIGH':
+            order = ['tor', 'proxy', 'direct']
+        elif self.risk == 'MEDIUM':
+            order = ['direct', 'proxy', 'tor']
+        else:
+            order = ['direct', 'proxy']
 
-        # LOW risk → try direct first, use if OK
-        if self.risk_level == 'LOW':
-            ok, elapsed = self._test_direct()
-            if ok:
-                self.selected_method = 'direct'
-                self.session = (
-                    self._make_direct_session()
-                )
-                self.connection_info = {
-                    'method': 'direct',
-                    'response_time': elapsed,
-                    'risk_level': self.risk_level,
-                }
-                self._print_selection()
-                return self.session
+        for method in order:
+            self._w(f'Trying: {method.upper()}', 'CONNECT')
+            if method == 'direct':
+                sess = self._direct_session()
+                if self._test_session(sess):
+                    self.selected_method = 'direct'
+                    self._session = sess
+                    self._w('DIRECT OK', 'SUCCESS')
+                    return sess
+            elif method == 'proxy':
+                sess = self._proxy_session()
+                if sess:
+                    self.selected_method = 'proxy'
+                    self._session = sess
+                    return sess
+            elif method == 'tor':
+                sess = self._tor_session()
+                if sess:
+                    self.selected_method = 'tor'
+                    self._session = sess
+                    return sess
 
-            # Direct failed → try proxy
-            print(
-                f"  {Fore.YELLOW}[!] Direct failed, "
-                "trying proxy..."
-                + Style.RESET_ALL
-            )
-            proxy_ok, proxy_session, proxy = (
-                self._test_proxy()
-            )
-            if proxy_ok:
-                self.selected_method = 'proxy'
-                self.session = proxy_session
-                self.connection_info = {
-                    'method': 'proxy',
-                    'proxy': proxy,
-                    'risk_level': self.risk_level,
-                }
-                self._print_selection()
-                return self.session
-
-            # Both failed → direct anyway
-            print(
-                f"  {Fore.YELLOW}[!] Using direct "
-                "(best available)"
-                + Style.RESET_ALL
-            )
-            self.selected_method = 'direct_fallback'
-            self.session = self._make_direct_session()
-            self.connection_info = {
-                'method': 'direct_fallback',
-                'risk_level': self.risk_level,
-            }
-            self._print_selection()
-            return self.session
-
-        # MEDIUM risk → prefer proxy
-        elif self.risk_level == 'MEDIUM':
-            # Test direct first to know baseline
-            direct_ok, elapsed = self._test_direct()
-
-            # Try proxy first for medium risk
-            proxy_ok, proxy_session, proxy = (
-                self._test_proxy()
-            )
-            if proxy_ok:
-                self.selected_method = 'proxy'
-                self.session = proxy_session
-                self.connection_info = {
-                    'method': 'proxy',
-                    'proxy': proxy,
-                    'risk_level': self.risk_level,
-                    'reason': 'Medium risk - '
-                              'using proxy for privacy',
-                }
-                self._print_selection()
-                return self.session
-
-            # Proxy failed → try Tor
-            tor_ok, tor_session = self._test_tor()
-            if tor_ok:
-                self.selected_method = 'tor'
-                self.session = tor_session
-                self.connection_info = {
-                    'method': 'tor',
-                    'risk_level': self.risk_level,
-                    'reason': 'Medium risk, '
-                              'proxy failed, using Tor',
-                }
-                self._print_selection()
-                return self.session
-
-            # Nothing available → direct
-            if direct_ok:
-                print(
-                    f"  {Fore.YELLOW}[!] Privacy tools "
-                    "unavailable. Using direct."
-                    + Style.RESET_ALL
-                )
-            self.selected_method = 'direct'
-            self.session = self._make_direct_session()
-            self.connection_info = {
-                'method': 'direct',
-                'risk_level': self.risk_level,
-                'warning': 'Privacy tools not available',
-            }
-            self._print_selection()
-            return self.session
-
-        # HIGH risk → prefer Tor, then proxy
-        elif self.risk_level == 'HIGH':
-            print(
-                f"  {Fore.RED}[!] HIGH RISK TARGET - "
-                "Prioritizing Tor..."
-                + Style.RESET_ALL
-            )
-
-            # Try Tor first for high risk
-            tor_ok, tor_session = self._test_tor()
-            if tor_ok:
-                self.selected_method = 'tor'
-                self.session = tor_session
-                self.connection_info = {
-                    'method': 'tor',
-                    'risk_level': self.risk_level,
-                    'reason': 'High risk - Tor selected',
-                }
-                self._print_selection()
-                return self.session
-
-            # Tor failed → try proxy
-            print(
-                f"  {Fore.YELLOW}[!] Tor unavailable, "
-                "trying proxy..."
-                + Style.RESET_ALL
-            )
-            proxy_ok, proxy_session, proxy = (
-                self._test_proxy()
-            )
-            if proxy_ok:
-                self.selected_method = 'proxy'
-                self.session = proxy_session
-                self.connection_info = {
-                    'method': 'proxy',
-                    'proxy': proxy,
-                    'risk_level': self.risk_level,
-                    'warning': 'Tor unavailable, '
-                               'using proxy',
-                }
-                self._print_selection()
-                return self.session
-
-            # Both failed → direct with warning
-            print(
-                f"\n  {Fore.RED}⚠ WARNING: High risk "
-                "target but no privacy tools available!"
-                + Style.RESET_ALL
-            )
-            print(
-                f"  {Fore.RED}  Install Tor Browser "
-                "or configure proxy for protection."
-                + Style.RESET_ALL
-            )
-
-            confirm = input(
-                f"\n  {Fore.YELLOW}Continue with "
-                "direct connection? (yes/no): "
-                + Style.RESET_ALL
-            ).strip().lower()
-
-            if confirm != 'yes':
-                print(
-                    f"  {Fore.RED}Scan cancelled."
-                    + Style.RESET_ALL
-                )
-                return None
-
-            self.selected_method = 'direct_high_risk'
-            self.session = self._make_direct_session()
-            self.connection_info = {
-                'method': 'direct',
-                'risk_level': self.risk_level,
-                'warning': 'HIGH RISK - no privacy '
-                           'protection active!',
-            }
-            self._print_selection()
-            return self.session
-
-        # Default fallback
-        self.session = self._make_direct_session()
-        return self.session
-
-    def _print_selection(self):
-        """Print final connection selection."""
-        method = self.connection_info.get(
-            'method', 'unknown'
-        )
-        color = {
-            'direct': Fore.GREEN,
-            'proxy': Fore.YELLOW,
-            'tor': Fore.CYAN,
-            'direct_fallback': Fore.YELLOW,
-            'direct_high_risk': Fore.RED,
-        }.get(method, Fore.WHITE)
-
-        icon = {
-            'direct': '→',
-            'proxy': '⇒',
-            'tor': '⊕',
-            'direct_fallback': '→',
-            'direct_high_risk': '⚠',
-        }.get(method, '→')
-
-        print(
-            f"\n  {color}{icon} Connection: "
-            f"{method.upper()}"
-            + Style.RESET_ALL
-        )
-
-        warning = self.connection_info.get('warning')
-        if warning:
-            print(
-                f"  {Fore.RED}⚠ {warning}"
-                + Style.RESET_ALL
-            )
-
-        reason = self.connection_info.get('reason')
-        if reason:
-            print(
-                f"  {Fore.WHITE}  Reason: {reason}"
-                + Style.RESET_ALL
-            )
+        self._w('All failed → direct fallback', 'WARN')
+        sess = self._direct_session()
+        self.selected_method = 'direct'
+        self._session = sess
+        return sess
 
     def rotate(self):
-        """
-        Rotate connection on block detection.
-        Called when 403/429/blocked detected.
-        """
-        print(
-            f"\n{Fore.YELLOW}[*] Connection rotation "
-            "triggered..."
-            + Style.RESET_ALL
-        )
+        self._w(f'Rotating from {self.selected_method}', 'ROTATE')
+        if self.selected_method == 'direct':
+            sess = self._proxy_session() or self._tor_session()
+        elif self.selected_method == 'proxy':
+            sess = self._tor_session() or self._direct_session()
+        else:
+            if self.tor_mgr._rotate_circuit():
+                time.sleep(3)
+                self.tor_mgr.session = self.tor_mgr._make_session()
+                sess = self.tor_mgr.session
+                self._w('Tor circuit rotated', 'ROTATE')
+            else:
+                sess = self._proxy_session() or self._direct_session()
+        if sess:
+            self._session = sess
+            return sess
+        self._session = self._direct_session()
+        self.selected_method = 'direct'
+        return self._session
 
-        current = self.selected_method
-
-        if current == 'direct':
-            # Escalate to proxy
-            proxy_ok, proxy_session, proxy = (
-                self._test_proxy()
-            )
-            if proxy_ok:
-                self.session = proxy_session
-                self.selected_method = 'proxy'
-                print(
-                    f"  {Fore.GREEN}[✓] Rotated to proxy"
-                    + Style.RESET_ALL
-                )
-                return self.session
-
-            # Then Tor
-            tor_ok, tor_session = self._test_tor()
-            if tor_ok:
-                self.session = tor_session
-                self.selected_method = 'tor'
-                print(
-                    f"  {Fore.GREEN}[✓] Rotated to Tor"
-                    + Style.RESET_ALL
-                )
-                return self.session
-
-        elif current == 'proxy':
-            # Try different proxy
-            proxy_ok, proxy_session, proxy = (
-                self._test_proxy()
-            )
-            if proxy_ok:
-                self.session = proxy_session
-                print(
-                    f"  {Fore.GREEN}[✓] Rotated proxy"
-                    + Style.RESET_ALL
-                )
-                return self.session
-
-            # Escalate to Tor
-            tor_ok, tor_session = self._test_tor()
-            if tor_ok:
-                self.session = tor_session
-                self.selected_method = 'tor'
-                print(
-                    f"  {Fore.GREEN}[✓] Escalated to Tor"
-                    + Style.RESET_ALL
-                )
-                return self.session
-
-        elif current == 'tor':
-            # Try new Tor circuit
-            try:
-                from connection_manager import (
-                    TorManager
-                )
-                tm = TorManager()
-                tm.rotate_circuit()
-                print(
-                    f"  {Fore.GREEN}[✓] Tor circuit "
-                    "rotated"
-                    + Style.RESET_ALL
-                )
-            except Exception:
-                print(
-                    f"  {Fore.YELLOW}[!] Circuit "
-                    "rotation failed"
-                    + Style.RESET_ALL
-                )
-
-        return self.session
+    def stop(self):
+        if self.tor_mgr:
+            self.tor_mgr.stop()

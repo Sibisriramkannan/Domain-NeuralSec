@@ -1,11 +1,11 @@
 import json
 import os
-import sys
 import time
+import threading
+import concurrent.futures
 import requests
 from datetime import datetime
 from colorama import Fore, Style, init
-
 from agents import (
     AuthAgent, CommandInjectionAgent,
     FileUploadAgent, SSRFAgent, XXEAgent,
@@ -23,915 +23,665 @@ init(autoreset=True)
 #  LIVE LOGGER
 # ════════════════════════════════════════════════════
 class LiveLogger:
-    """
-    Prints detailed real-time logs
-    for every action happening in backend.
-    """
+    _lock = threading.Lock()
 
-    def __init__(self, agent_name, agent_num, total):
-        self.agent_name = agent_name
-        self.agent_num = agent_num
+    def __init__(self, name, num, total, writer=None):
+        self.name = name
+        self.num = num
         self.total = total
-        self.step_count = 0
-        self.start_time = time.time()
+        self.start = time.time()
+        self.steps = 0
+        self.writer = writer
+
+    def _w(self, msg, level='INFO'):
+        if self.writer:
+            try:
+                self.writer(msg, level)
+            except:
+                pass
+
+    def _p(self, col, plain, level='INFO'):
+        with LiveLogger._lock:
+            print(col)
+        self._w(plain, level)
 
     def header(self):
-        elapsed = round(time.time() - self.start_time, 1)
-        print(
-            f"\n{Fore.MAGENTA}"
-            + "═" * 62
-            + Style.RESET_ALL
-        )
-        print(
-            f"{Fore.MAGENTA}  [{self.agent_num}/{self.total}] "
-            f"{self.agent_name}"
-            + Style.RESET_ALL
-        )
-        print(
-            f"{Fore.MAGENTA}"
-            + "═" * 62
-            + Style.RESET_ALL
+        self._p(
+            f"\n{Fore.MAGENTA}{'═'*62}\n"
+            f"  [{self.num:02d}/{self.total}]"
+            f" {self.name}\n{'═'*62}"
+            f"{Style.RESET_ALL}",
+            f"[{self.num}/{self.total}] {self.name}",
+            'AGENT'
         )
 
     def step(self, msg):
-        self.step_count += 1
-        elapsed = round(time.time() - self.start_time, 1)
-        print(
-            f"  {Fore.CYAN}[STEP {self.step_count}] "
-            f"{msg} "
-            f"{Fore.WHITE}({elapsed}s)"
-            + Style.RESET_ALL
+        self.steps += 1
+        e = round(time.time() - self.start, 1)
+        self._p(
+            f"  {Fore.YELLOW}[►] {msg}"
+            f" {Fore.WHITE}({e}s){Style.RESET_ALL}",
+            f"[STEP {self.steps}] {msg} ({e}s)",
+            'AGENT'
         )
 
     def info(self, msg):
-        print(
-            f"    {Fore.WHITE}│ {msg}"
-            + Style.RESET_ALL
+        self._p(
+            f"    {Fore.WHITE}│ {msg}{Style.RESET_ALL}",
+            msg, 'INFO'
         )
 
-    def found(self, msg):
-        print(
+    def ok(self, msg):
+        self._p(
             f"    {Fore.GREEN}│ ✓ {msg}"
-            + Style.RESET_ALL
+            f"{Style.RESET_ALL}",
+            f"✓ {msg}", 'SUCCESS'
         )
 
     def warn(self, msg):
-        print(
+        self._p(
             f"    {Fore.YELLOW}│ ⚠ {msg}"
-            + Style.RESET_ALL
+            f"{Style.RESET_ALL}",
+            f"⚠ {msg}", 'WARN'
         )
 
-    def critical(self, msg):
-        print(
-            f"    {Fore.RED}│ ⚠⚠ CRITICAL: {msg}"
-            + Style.RESET_ALL
+    def finding(self, risk, title, detail=''):
+        c = {
+            'CRITICAL': Fore.RED,
+            'HIGH': Fore.RED,
+            'MEDIUM': Fore.YELLOW,
+            'LOW': Fore.GREEN
+        }.get(risk.upper(), Fore.WHITE)
+        m = f"{title} | {detail}" if detail else title
+        self._p(
+            f"    {c}│ [{risk}] {m}{Style.RESET_ALL}",
+            f"[{risk}] {m}", 'WARN'
         )
 
-    def high(self, msg):
-        print(
-            f"    {Fore.RED}│ !! HIGH: {msg}"
-            + Style.RESET_ALL
+    def testing(self, what, val=''):
+        self._p(
+            f"    {Fore.CYAN}│ ▶ {what}"
+            f" → {str(val)[:45]}{Style.RESET_ALL}",
+            f"Testing {what} {val}", 'AGENT'
         )
 
-    def medium(self, msg):
-        print(
-            f"    {Fore.YELLOW}│ !  MEDIUM: {msg}"
-            + Style.RESET_ALL
-        )
-
-    def low(self, msg):
-        print(
-            f"    {Fore.GREEN}│ -  LOW: {msg}"
-            + Style.RESET_ALL
-        )
-
-    def testing(self, what, value=''):
-        val_str = (
-            f" → {Fore.WHITE}{value[:50]}"
-            if value else ''
-        )
-        print(
-            f"    {Fore.CYAN}│ ▶ Testing: "
-            f"{Fore.WHITE}{what}"
-            f"{val_str}"
-            + Style.RESET_ALL
-        )
-
-    def skip(self, msg):
-        print(
-            f"    {Fore.WHITE}│ ○ Skip: {msg}"
-            + Style.RESET_ALL
-        )
-
-    def done(self, finding_count):
-        elapsed = round(time.time() - self.start_time, 1)
-        color = (
-            Fore.RED
-            if finding_count > 0
-            else Fore.GREEN
-        )
-        icon = '⚠' if finding_count > 0 else '✓'
-        print(
-            f"\n  {color}{icon} {self.agent_name} "
-            f"DONE — "
-            f"{finding_count} finding(s) | "
-            f"{elapsed}s"
-            + Style.RESET_ALL
+    def done(self, count, dur=None):
+        d = dur or round(time.time() - self.start, 1)
+        col = Fore.RED if count > 0 else Fore.GREEN
+        icon = '⚠' if count > 0 else '✓'
+        self._p(
+            f"\n  {col}{icon} {self.name}"
+            f" DONE → {count} | {d}s"
+            f"{Style.RESET_ALL}",
+            f"{self.name} DONE → {count} | {d}s",
+            'SUCCESS'
         )
 
     def error(self, msg):
-        print(
-            f"    {Fore.RED}│ ✗ ERROR: {msg}"
-            + Style.RESET_ALL
+        self._p(
+            f"    {Fore.RED}│ ✗ {msg}"
+            f"{Style.RESET_ALL}",
+            f"ERROR: {msg}", 'ERROR'
         )
 
-    def finding(self, risk, ftype, detail=''):
-        risk_upper = risk.upper()
-        if risk_upper == 'CRITICAL':
-            self.critical(f"{ftype} | {detail}")
-        elif risk_upper == 'HIGH':
-            self.high(f"{ftype} | {detail}")
-        elif risk_upper == 'MEDIUM':
-            self.medium(f"{ftype} | {detail}")
-        else:
-            self.low(f"{ftype} | {detail}")
+    def critical(self, msg):
+        self._p(
+            f"    {Fore.RED}│ ⚠⚠ CRITICAL: {msg}"
+            f"{Style.RESET_ALL}",
+            f"CRITICAL: {msg}", 'CRITICAL'
+        )
+
+    def skip(self, msg):
+        self._p(
+            f"    {Fore.WHITE}│ ○ Skip: {msg}"
+            f"{Style.RESET_ALL}",
+            f"Skip: {msg}", 'INFO'
+        )
+
+    def timeout(self, seconds):
+        self._p(
+            f"    {Fore.YELLOW}│ ⏱ TIMEOUT:"
+            f" {seconds}s exceeded"
+            f"{Style.RESET_ALL}",
+            f"TIMEOUT: {seconds}s exceeded",
+            'WARN'
+        )
 
 
 # ════════════════════════════════════════════════════
-#  VERBOSE AGENT RUNNERS
+#  SESSION BUILDER - Fresh per agent
 # ════════════════════════════════════════════════════
+def _make_agent_session(base_session=None):
+    """
+    Create fresh session for each agent.
+    Copies proxy settings from base session
+    but avoids sharing state.
+    """
+    s = requests.Session()
+    s.headers.update({
+        'User-Agent': (
+            'SecurityAudit/1.0 '
+            '(Authorized Assessment)'
+        )
+    })
+    s.timeout = 10
 
+    # Copy proxy if base has Tor/proxy
+    if base_session and hasattr(
+        base_session, 'proxies'
+    ):
+        if base_session.proxies:
+            s.proxies = base_session.proxies.copy()
+
+    return s
+
+
+# ════════════════════════════════════════════════════
+#  AUTH AGENT
+# ════════════════════════════════════════════════════
 def run_auth_verbose(target_url, session, log):
-    """Authentication agent with full live logging."""
-    from agents.auth_agent import AuthAgent
     from urllib.parse import urljoin
-    from bs4 import BeautifulSoup
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        log.error("BeautifulSoup not installed")
+        return []
 
     findings = []
 
-    # ── Step 1: Detect login pages ───────────────────
-    log.step("Scanning for login pages")
-
-    login_paths = [
-        '/login', '/signin', '/auth',
-        '/admin', '/admin/login',
-        '/user/login', '/account/login',
-        '/wp-login.php', '/wp-admin',
-        '/administrator', '/panel',
-        '/dashboard', '/portal',
-        '/api/login', '/api/auth',
-        '/api/v1/login', '/api/v2/login',
-        '/member/login', '/user/signin',
-        '/auth/login', '/auth/signin',
-    ]
-
-    log.info(
-        f"Probing {len(login_paths)} common paths..."
+    log.step(
+        "Phase 1: Login page discovery"
+        " (8 paths parallel)"
     )
+    login_paths = [
+        '/login', '/signin', '/admin',
+        '/wp-login.php', '/wp-admin',
+        '/administrator', '/api/login',
+        '/dashboard',
+    ]
     found_pages = []
+    plock = threading.Lock()
 
-    for path in login_paths:
+    def check_path(path):
         url = urljoin(target_url, path)
-        log.testing("Login path", path)
         try:
             r = session.get(
-                url, timeout=6,
+                url, timeout=5,
                 allow_redirects=True
             )
             if r.status_code == 200:
                 soup = BeautifulSoup(
                     r.text, 'html.parser'
                 )
-                forms = soup.find_all('form')
                 has_pwd = any(
-                    inp.get('type') == 'password'
-                    for form in forms
-                    for inp in form.find_all('input')
+                    i.get('type') == 'password'
+                    for f in soup.find_all('form')
+                    for i in f.find_all('input')
                 )
-                if has_pwd or 'login' in r.text.lower():
-                    found_pages.append({
-                        'url': url,
-                        'has_form': bool(forms),
-                        'has_password_field': has_pwd
-                    })
-                    log.found(
-                        f"Login page found: {path}"
-                    )
-                else:
-                    log.info(
-                        f"[{r.status_code}] "
-                        f"No login form: {path}"
-                    )
-            else:
-                log.info(
-                    f"[{r.status_code}] {path}"
-                )
-        except Exception as e:
-            log.info(f"Timeout/Error: {path}")
+                if has_pwd:
+                    with plock:
+                        found_pages.append({
+                            'url': url, 'path': path
+                        })
+                    log.ok(f"Login found: {path}")
+        except:
+            pass
 
-    log.info(
-        f"Total login pages found: {len(found_pages)}"
-    )
+    try:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=8
+        ) as ex:
+            ex.map(check_path, login_paths)
+    except:
+        pass
+
+    log.info(f"Found {len(found_pages)} login pages")
 
     if not found_pages:
-        log.warn(
-            "No login pages found. "
-            "Skipping auth tests."
-        )
+        log.warn("No login pages")
         findings.append({
             'type': 'No Login Page Found',
             'category': 'authentication',
             'risk': 'INFO',
-            'description': (
-                'No standard login pages detected'
-            ),
-            'note': 'Custom auth paths may exist'
+            'description': 'No standard login pages'
         })
         return findings
 
-    # ── Step 2: Default credentials ──────────────────
-    log.step("Testing default credentials")
-
+    # Phase 2: Default creds
+    log.step("Phase 2: Default creds (6 pairs)")
     default_creds = [
         ('admin', 'admin'),
         ('admin', 'password'),
         ('admin', '123456'),
-        ('admin', 'admin123'),
         ('admin', ''),
         ('root', 'root'),
-        ('root', 'password'),
-        ('administrator', 'administrator'),
         ('test', 'test'),
-        ('guest', 'guest'),
-        ('user', 'user'),
-        ('admin', 'letmein'),
     ]
-
-    log.info(
-        f"Testing {len(default_creds)} "
-        f"credential pairs on "
-        f"{min(3, len(found_pages))} pages..."
-    )
-
-    success_indicators = [
+    success_kw = [
         'dashboard', 'logout', 'welcome',
-        'profile', 'settings', 'account',
-        'signed in', 'logged in',
+        'profile', 'signed in', 'logged in'
     ]
-    failure_indicators = [
+    failure_kw = [
         'invalid', 'incorrect', 'wrong',
-        'failed', 'error', 'denied',
-        'unauthorized', 'bad credentials',
+        'failed', 'error', 'denied'
     ]
 
-    for page in found_pages[:3]:
-        url = page['url']
-        log.info(f"Target form: {url}")
-        try:
-            r = session.get(url, timeout=8)
-            soup = BeautifulSoup(r.text, 'html.parser')
-            form = soup.find('form')
-            if not form:
-                log.skip("No form found on page")
-                continue
-
-            inputs = form.find_all('input')
-            user_field = None
-            pass_field = None
-            for inp in inputs:
-                itype = inp.get('type', '').lower()
-                iname = inp.get('name', '').lower()
-                if itype in ['text', 'email'] or any(
-                    k in iname for k in [
-                        'user', 'email', 'login',
-                        'name', 'id'
-                    ]
-                ):
-                    user_field = inp.get('name')
-                elif itype == 'password':
-                    pass_field = inp.get('name')
-
-            if not user_field or not pass_field:
-                log.skip(
-                    "Could not identify "
-                    "username/password fields"
-                )
-                continue
-
-            log.info(
-                f"Fields detected → "
-                f"user: '{user_field}' | "
-                f"pass: '{pass_field}'"
-            )
-
-            action = form.get('action', url)
-            if not action.startswith('http'):
-                action = urljoin(url, action)
-
-            for username, password in default_creds[:8]:
-                log.testing(
-                    "Credentials",
-                    f"{username}:{password}"
-                )
-                data = {
-                    user_field: username,
-                    pass_field: password
-                }
-                try:
-                    resp = session.post(
-                        action, data=data,
-                        timeout=10,
-                        allow_redirects=True
-                    )
-                    resp_lower = resp.text.lower()
-                    success = any(
-                        s in resp_lower
-                        for s in success_indicators
-                    )
-                    failure = any(
-                        f in resp_lower
-                        for f in failure_indicators
-                    )
-                    if success and not failure:
-                        log.critical(
-                            f"Default credentials work: "
-                            f"{username}:{password}"
-                        )
-                        finding = {
-                            'type': (
-                                'Default Credentials Accepted'
-                            ),
-                            'category': 'authentication',
-                            'risk': 'CRITICAL',
-                            'url': action,
-                            'username': username,
-                            'password': password,
-                            'description': (
-                                f'Default credentials '
-                                f'"{username}:{password}" '
-                                f'accepted'
-                            ),
-                            'business_impact': (
-                                'Full account takeover. '
-                                'Immediate admin access.'
-                            ),
-                            'fix': (
-                                '1. Change all default passwords\n'
-                                '2. Enforce strong policy\n'
-                                '3. Implement lockout\n'
-                                '4. Enable MFA'
-                            ),
-                            'cvss_score': 9.8,
-                            'cwe': 'CWE-798'
-                        }
-                        findings.append(finding)
-                        log.finding(
-                            'CRITICAL',
-                            'Default Credentials',
-                            f"{username}:{password}"
-                        )
-                    else:
-                        log.info(
-                            f"Rejected: "
-                            f"{username}:{password}"
-                        )
-                    time.sleep(0.3)
-                except Exception as e:
-                    log.error(f"Request failed: {e}")
-        except Exception as e:
-            log.error(f"Form parse error: {e}")
-
-    # ── Step 3: Account lockout ───────────────────────
-    log.step("Testing account lockout policy")
-    log.info(
-        "Sending 10 failed login attempts..."
-    )
-
-    for page in found_pages[:2]:
+    for page in found_pages[:1]:
         url = page['url']
         try:
-            r = session.get(url, timeout=8)
+            r = session.get(url, timeout=6)
             soup = BeautifulSoup(r.text, 'html.parser')
             form = soup.find('form')
             if not form:
                 continue
-
-            inputs = form.find_all('input')
-            user_field = None
-            pass_field = None
-            for inp in inputs:
-                itype = inp.get('type', '').lower()
-                iname = inp.get('name', '').lower()
-                if itype in ['text', 'email'] or any(
-                    k in iname for k in [
+            user_field = pass_field = None
+            for inp in form.find_all('input'):
+                t = inp.get('type', '').lower()
+                n = inp.get('name', '').lower()
+                if t in ['text', 'email'] or any(
+                    k in n for k in [
                         'user', 'email', 'login'
                     ]
                 ):
                     user_field = inp.get('name')
-                elif itype == 'password':
+                elif t == 'password':
                     pass_field = inp.get('name')
-
             if not user_field or not pass_field:
                 continue
-
+            log.info(
+                f"Fields → user:'{user_field}'"
+                f" pass:'{pass_field}'"
+            )
             action = form.get('action', url)
             if not action.startswith('http'):
                 action = urljoin(url, action)
-
-            lockout_detected = False
-            for i in range(10):
-                log.testing(
-                    f"Failed attempt {i+1}/10",
-                    f"wrong_password_{i}"
-                )
-                data = {
-                    user_field: 'lockout_test_user',
-                    pass_field: f'wrong_password_{i}'
-                }
+            for uname, pwd in default_creds:
+                log.testing("Creds", f"{uname}:{pwd}")
                 try:
                     resp = session.post(
-                        action, data=data,
-                        timeout=8
+                        action,
+                        data={
+                            user_field: uname,
+                            pass_field: pwd
+                        },
+                        timeout=8,
+                        allow_redirects=True
                     )
-                    resp_lower = resp.text.lower()
-                    if any(
-                        k in resp_lower for k in [
-                            'locked', 'too many',
-                            'blocked', 'suspended',
-                            'temporarily', 'limit'
-                        ]
+                    rl = resp.text.lower()
+                    if (
+                        any(s in rl for s in success_kw)
+                        and not any(
+                            f in rl for f in failure_kw
+                        )
                     ):
-                        lockout_detected = True
-                        log.found(
-                            f"Lockout triggered "
-                            f"at attempt {i+1}"
+                        log.critical(
+                            f"Creds work: {uname}:{pwd}"
                         )
-                        break
-                    if resp.status_code == 429:
-                        lockout_detected = True
-                        log.found(
-                            f"Rate limit (429) "
-                            f"at attempt {i+1}"
-                        )
-                        break
-                    log.info(
-                        f"Attempt {i+1}: "
-                        f"status={resp.status_code}"
-                    )
-                except Exception:
+                        findings.append({
+                            'type': 'Default Credentials',
+                            'category': 'authentication',
+                            'risk': 'CRITICAL',
+                            'url': action,
+                            'username': uname,
+                            'password': pwd,
+                            'description': (
+                                f'"{uname}:{pwd}" accepted'
+                            ),
+                            'business_impact': (
+                                'Full account takeover'
+                            ),
+                            'fix': 'Change defaults + MFA',
+                            'cvss_score': 9.8,
+                            'cwe': 'CWE-798'
+                        })
+                    time.sleep(0.15)
+                except:
                     pass
-                time.sleep(0.2)
+        except:
+            pass
 
-            if not lockout_detected:
-                log.high(
-                    "No lockout after 10 attempts!"
+    # Phase 3: Lockout
+    log.step("Phase 3: Lockout test (5 attempts)")
+    for page in found_pages[:1]:
+        url = page['url']
+        try:
+            r = session.get(url, timeout=6)
+            soup = BeautifulSoup(r.text, 'html.parser')
+            form = soup.find('form')
+            if not form:
+                continue
+            user_field = pass_field = None
+            for inp in form.find_all('input'):
+                t = inp.get('type', '').lower()
+                n = inp.get('name', '').lower()
+                if t in ['text', 'email'] or any(
+                    k in n for k in [
+                        'user', 'email', 'login'
+                    ]
+                ):
+                    user_field = inp.get('name')
+                elif t == 'password':
+                    pass_field = inp.get('name')
+            if not user_field or not pass_field:
+                continue
+            action = form.get('action', url)
+            if not action.startswith('http'):
+                action = urljoin(url, action)
+            lockout = False
+            for i in range(5):
+                log.testing(
+                    f"Attempt {i+1}/5", f"wrong_{i}"
                 )
+                try:
+                    resp = session.post(
+                        action,
+                        data={
+                            user_field: 'locktest',
+                            pass_field: f'wrong_{i}'
+                        },
+                        timeout=6
+                    )
+                    rl = resp.text.lower()
+                    if any(
+                        k in rl for k in [
+                            'locked', 'too many',
+                            'blocked', 'limit'
+                        ]
+                    ) or resp.status_code == 429:
+                        lockout = True
+                        log.ok(
+                            f"Lockout at {i+1}"
+                        )
+                        break
+                except:
+                    pass
+                time.sleep(0.1)
+            if not lockout:
+                log.warn("No lockout!")
                 findings.append({
-                    'type': 'Missing Account Lockout',
+                    'type': 'Missing Lockout',
                     'category': 'authentication',
                     'risk': 'HIGH',
                     'url': url,
                     'description': (
-                        'No lockout after '
-                        '10 failed login attempts'
+                        'No lockout after 5 attempts'
                     ),
-                    'business_impact': (
-                        'Brute force attacks unrestricted'
-                    ),
-                    'fix': (
-                        '1. Lock after 5 failed attempts\n'
-                        '2. Progressive delay\n'
-                        '3. Add CAPTCHA\n'
-                        '4. Alert on failures'
-                    ),
+                    'business_impact': 'Brute force',
+                    'fix': 'Lock after 5 fails',
                     'cvss_score': 7.5,
                     'cwe': 'CWE-307'
                 })
-                log.finding(
-                    'HIGH', 'Missing Account Lockout',
-                    url
-                )
-            else:
-                log.found("Lockout policy active - GOOD")
-        except Exception as e:
-            log.error(f"Lockout test error: {e}")
+        except:
+            pass
 
-    # ── Step 4: MFA detection ─────────────────────────
-    log.step("Checking for MFA indicators")
-    mfa_indicators = [
-        'two-factor', '2fa', 'totp',
-        'authenticator', 'otp', 'verification code',
-        'one-time', 'sms code', 'email code'
-    ]
-
-    for page in found_pages[:3]:
-        log.testing("MFA indicators", page['url'])
+    # Phase 4: MFA
+    log.step("Phase 4: MFA detection")
+    if found_pages:
         try:
-            r = session.get(page['url'], timeout=8)
-            resp_lower = r.text.lower()
-            found_mfa = [
-                m for m in mfa_indicators
-                if m in resp_lower
-            ]
-            if found_mfa:
-                log.found(
-                    f"MFA detected: {found_mfa}"
-                )
+            r = session.get(
+                found_pages[0]['url'], timeout=6
+            )
+            rl = r.text.lower()
+            if any(
+                k in rl for k in [
+                    'two-factor', '2fa', 'totp',
+                    'authenticator', 'otp'
+                ]
+            ):
+                log.ok("MFA detected")
             else:
-                log.medium(
-                    "No MFA indicators found"
-                )
+                log.info("No MFA")
                 findings.append({
                     'type': 'No MFA Detected',
                     'category': 'authentication',
                     'risk': 'MEDIUM',
-                    'url': page['url'],
-                    'description': (
-                        'No MFA indicators on login page'
-                    ),
-                    'business_impact': (
-                        'Password compromise = '
-                        'full account access'
-                    ),
-                    'fix': (
-                        '1. Implement TOTP\n'
-                        '2. Add SMS/Email OTP\n'
-                        '3. Enforce MFA for admin'
-                    ),
+                    'url': found_pages[0]['url'],
+                    'description': 'No MFA',
+                    'business_impact': 'Password=access',
+                    'fix': 'TOTP',
                     'cvss_score': 6.5,
                     'cwe': 'CWE-308'
                 })
-                log.finding(
-                    'MEDIUM', 'No MFA', page['url']
-                )
-        except Exception as e:
-            log.error(f"MFA check error: {e}")
+        except:
+            pass
 
     return findings
 
 
+# ════════════════════════════════════════════════════
+#  COMMAND INJECTION AGENT
+# ════════════════════════════════════════════════════
 def run_command_injection_verbose(
     target_url, session, log
 ):
-    """Command injection with live logging."""
-    import os as _os
     from urllib.parse import quote, urlparse
-
     findings = []
-
-    def load_payloads():
-        path = _os.path.join(
-            'payloads',
-            'command_injection_payloads.txt'
-        )
-        try:
-            with open(path, 'r') as f:
-                return [
-                    l.strip() for l in f
-                    if l.strip()
-                    and not l.startswith('#')
-                ]
-        except FileNotFoundError:
-            return [
-                '; ls', '| ls', '& ls',
-                '; whoami', '| whoami',
-                '; sleep 5', '| sleep 5',
-                '$(id)', '`id`'
-            ]
-
-    payloads = load_payloads()
-    log.step(
-        f"Loaded {len(payloads)} command injection payloads"
-    )
-
+    payloads = [
+        '; ls', '| ls', '& ls',
+        '; whoami', '| whoami',
+        '$(id)', '`id`'
+    ]
     os_indicators = [
-        'uid=', 'gid=', 'groups=',
-        'root:', 'daemon:', '/bin/sh',
-        'volume serial', 'windows ip',
-        'directory of', 'total 0',
-        '/usr/bin', '/usr/local',
-        'drwxr', '-rwxr'
+        'uid=', 'gid=', 'root:',
+        '/usr/bin', 'drwxr'
     ]
 
+    log.step(
+        f"Phase 1: Error-based"
+        f" ({len(payloads)} payloads)"
+    )
     parsed = urlparse(target_url)
     if not parsed.query:
-        log.skip(
-            "No URL parameters found. "
-            "Trying common param names..."
-        )
         test_urls = [
-            f"{target_url}?cmd=ls",
-            f"{target_url}?exec=ls",
-            f"{target_url}?command=ls",
-            f"{target_url}?run=ls",
             f"{target_url}?ping=127.0.0.1",
             f"{target_url}?host=localhost",
-            f"{target_url}?ip=127.0.0.1",
+            f"{target_url}?cmd=ls",
         ]
-        log.info(
-            f"Testing {len(test_urls)} "
-            f"common command params..."
-        )
+        log.info(f"Probe URLs: {len(test_urls)}")
     else:
-        params = {}
-        for p in parsed.query.split('&'):
-            if '=' in p:
-                k, v = p.split('=', 1)
-                params[k] = v
         test_urls = [target_url]
-        log.info(
-            f"URL params found: "
-            f"{list(params.keys())}"
+        params_dict = dict(
+            p.split('=', 1)
+            for p in parsed.query.split('&')
+            if '=' in p
         )
-
-    # Error-based
-    log.step("Phase 1: Error-based command injection")
-    log.info(
-        f"Testing {len(payloads[:8])} payloads..."
-    )
-
-    for url in test_urls[:3]:
-        parsed = urlparse(url)
-        params = {}
-        for p in parsed.query.split('&'):
-            if '=' in p:
-                k, v = p.split('=', 1)
-                params[k] = v
-
-        for param in list(params.keys())[:3]:
-            log.info(f"Parameter: '{param}'")
-            for payload in payloads[:8]:
-                log.testing(
-                    f"Payload on '{param}'",
-                    payload
-                )
-                test_params = params.copy()
-                test_params[param] = (
-                    params[param] + payload
-                )
-                q = '&'.join(
-                    f'{k}={quote(str(v), safe="")}'
-                    for k, v in test_params.items()
-                )
-                test_url = (
-                    f"{parsed.scheme}://"
-                    f"{parsed.netloc}"
-                    f"{parsed.path}?{q}"
-                )
-                try:
-                    r = session.get(
-                        test_url, timeout=10
-                    )
-                    for indicator in os_indicators:
-                        if indicator in r.text:
-                            log.critical(
-                                f"OS output detected! "
-                                f"Indicator: '{indicator}' "
-                                f"in param '{param}'"
-                            )
-                            findings.append({
-                                'type': (
-                                    'Command Injection '
-                                    '- Error Based'
-                                ),
-                                'category': (
-                                    'command_injection'
-                                ),
-                                'risk': 'CRITICAL',
-                                'url': test_url,
-                                'parameter': param,
-                                'payload': payload,
-                                'evidence': indicator,
-                                'description': (
-                                    f'OS output in "{param}"'
-                                ),
-                                'business_impact': (
-                                    'RCE - Server compromised'
-                                ),
-                                'fix': (
-                                    '1. Never pass input '
-                                    'to OS commands\n'
-                                    '2. Use safe APIs\n'
-                                    '3. Whitelist input'
-                                ),
-                                'cvss_score': 10.0,
-                                'cwe': 'CWE-78'
-                            })
-                            log.finding(
-                                'CRITICAL',
-                                'Command Injection',
-                                f"param={param}"
-                            )
-                            break
-                    else:
-                        log.info(
-                            f"No OS output detected "
-                            f"[status={r.status_code}]"
-                        )
-                    time.sleep(0.2)
-                except Exception as e:
-                    log.error(f"Request error: {e}")
-
-    # Time-based
-    log.step("Phase 2: Time-based blind command injection")
-    log.info("Testing sleep/delay payloads...")
-
-    time_payloads = [
-        '; sleep 5',
-        '| sleep 5',
-        '& sleep 5',
-        '; ping -c 5 127.0.0.1',
-    ]
+        log.info(f"URL params: {list(params_dict.keys())}")
 
     for url in test_urls[:2]:
-        parsed = urlparse(url)
-        params = {}
-        for p in parsed.query.split('&'):
-            if '=' in p:
-                k, v = p.split('=', 1)
-                params[k] = v
-
+        p2 = urlparse(url)
+        params = dict(
+            p.split('=', 1)
+            for p in p2.query.split('&')
+            if '=' in p
+        )
         for param in list(params.keys())[:2]:
-            try:
-                log.testing(
-                    "Baseline response time",
-                    url
+            log.info(f"Testing param: '{param}'")
+            for payload in payloads[:6]:
+                log.testing(f"'{param}'", payload)
+                tp = params.copy()
+                tp[param] = params[param] + payload
+                q = '&'.join(
+                    f'{k}={quote(str(v), safe="")}'
+                    for k, v in tp.items()
                 )
+                turl = (
+                    f"{p2.scheme}://{p2.netloc}"
+                    f"{p2.path}?{q}"
+                )
+                try:
+                    r = session.get(turl, timeout=8)
+                    hit = next(
+                        (
+                            ind for ind in os_indicators
+                            if ind in r.text
+                        ),
+                        None
+                    )
+                    if hit:
+                        log.critical(
+                            f"OS output! '{hit}'"
+                            f" in '{param}'"
+                        )
+                        findings.append({
+                            'type': 'Command Injection',
+                            'category': (
+                                'command_injection'
+                            ),
+                            'risk': 'CRITICAL',
+                            'url': turl,
+                            'parameter': param,
+                            'payload': payload,
+                            'evidence': hit,
+                            'description': (
+                                f'OS output in "{param}"'
+                            ),
+                            'business_impact': 'RCE',
+                            'fix': 'No OS calls',
+                            'cvss_score': 10.0,
+                            'cwe': 'CWE-78'
+                        })
+                    time.sleep(0.1)
+                except Exception as e:
+                    log.error(str(e))
+
+    log.step("Phase 2: Time-based blind")
+    time_payloads = ['; sleep 3', '| sleep 3']
+    if parsed.query:
+        params = dict(
+            p.split('=', 1)
+            for p in parsed.query.split('&')
+            if '=' in p
+        )
+        for param in list(params.keys())[:1]:
+            try:
                 start = time.time()
-                session.get(url, timeout=12)
+                session.get(target_url, timeout=10)
                 baseline = time.time() - start
                 log.info(
                     f"Baseline: {round(baseline, 2)}s"
                 )
-            except Exception:
+            except:
                 continue
-
-            for payload in time_payloads[:3]:
-                log.testing(
-                    f"Time payload on '{param}'",
-                    payload
-                )
-                test_params = params.copy()
-                test_params[param] = (
-                    params[param] + payload
-                )
+            for payload in time_payloads:
+                log.testing("Time payload", payload)
+                tp = params.copy()
+                tp[param] = params[param] + payload
                 q = '&'.join(
                     f'{k}={quote(str(v), safe="")}'
-                    for k, v in test_params.items()
+                    for k, v in tp.items()
                 )
-                test_url = (
+                turl = (
                     f"{parsed.scheme}://"
                     f"{parsed.netloc}"
                     f"{parsed.path}?{q}"
                 )
                 try:
-                    start = time.time()
-                    session.get(
-                        test_url, timeout=15
-                    )
-                    elapsed = time.time() - start
+                    s = time.time()
+                    session.get(turl, timeout=12)
+                    elapsed = time.time() - s
                     log.info(
-                        f"Response time: "
-                        f"{round(elapsed, 2)}s "
-                        f"(baseline: "
-                        f"{round(baseline, 2)}s)"
+                        f"Time: {round(elapsed, 2)}s"
                     )
-
-                    if elapsed > baseline + 4:
+                    if elapsed > baseline + 2.5:
                         delay = round(
                             elapsed - baseline, 1
                         )
                         log.critical(
-                            f"TIME DELAY DETECTED! "
-                            f"+{delay}s delay "
-                            f"→ param='{param}'"
+                            f"Delay +{delay}s!"
                         )
                         findings.append({
                             'type': (
-                                'Command Injection '
-                                '- Time Based Blind'
+                                'Blind Command Injection'
                             ),
                             'category': (
                                 'command_injection'
                             ),
                             'risk': 'CRITICAL',
-                            'url': test_url,
+                            'url': turl,
                             'parameter': param,
                             'payload': payload,
-                            'baseline_time': round(
-                                baseline, 2
-                            ),
-                            'actual_time': round(
-                                elapsed, 2
-                            ),
                             'description': (
-                                f'Blind CMDi in '
-                                f'"{param}". '
-                                f'Delay: +{delay}s'
+                                f'Blind CMDi +{delay}s'
                             ),
                             'business_impact': (
-                                'Blind RCE possible'
+                                'Blind RCE'
                             ),
-                            'fix': (
-                                '1. Avoid OS calls\n'
-                                '2. Use safe APIs\n'
-                                '3. Input whitelist'
-                            ),
+                            'fix': 'No OS calls',
                             'cvss_score': 10.0,
                             'cwe': 'CWE-78'
                         })
-                        log.finding(
-                            'CRITICAL',
-                            'Blind Command Injection',
-                            f"delay=+{delay}s"
-                        )
-                    else:
-                        log.info(
-                            "No significant delay"
-                        )
                 except Exception as e:
-                    log.error(f"Error: {e}")
-                time.sleep(0.3)
+                    log.error(str(e))
+    else:
+        log.skip("No params for time-based")
 
     return findings
 
 
-def run_generic_agent_verbose(
-    agent_class, target_url,
-    session, log, *args, **kwargs
+# ════════════════════════════════════════════════════
+#  GENERIC AGENT WRAPPER - WITH TIMEOUT FIX
+# ════════════════════════════════════════════════════
+def run_agent_verbose(
+    agent_class, target_url, session, log,
+    extra_info=None,
+    timeout_sec=60   # ✅ Per-agent timeout
 ):
     """
-    Generic wrapper - runs any agent and
-    logs each finding in real-time.
+    Runs any agent with hard timeout.
+    Prevents single agent from blocking all.
     """
-    try:
-        agent = agent_class(target_url, session)
+    if extra_info:
+        for line in extra_info:
+            log.info(line)
 
-        # Monkey-patch session to log requests
-        original_get = session.get
-        original_post = session.post
-        request_count = [0]
+    # ── Result holders ────────────────────────────
+    result_holder = [None]
+    error_holder = [None]
+    done_event = threading.Event()
 
-        def logged_get(url, **kw):
-            request_count[0] += 1
-            log.info(
-                f"GET [{request_count[0]}] "
-                f"{url[:70]}"
-            )
-            r = original_get(url, **kw)
-            log.info(
-                f"    → [{r.status_code}] "
-                f"{len(r.content)} bytes"
-            )
-            return r
+    def _run():
+        try:
+            agent = agent_class(target_url, session)
+            result_holder[0] = agent.run_full_scan()
+        except Exception as e:
+            error_holder[0] = e
+        finally:
+            done_event.set()
 
-        def logged_post(url, **kw):
-            request_count[0] += 1
-            log.info(
-                f"POST [{request_count[0]}] "
-                f"{url[:70]}"
-            )
-            r = original_post(url, **kw)
-            log.info(
-                f"    → [{r.status_code}] "
-                f"{len(r.content)} bytes"
-            )
-            return r
+    # ── Run in thread with timeout ────────────────
+    log.step(f"Running scan (max {timeout_sec}s)...")
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
 
-        session.get = logged_get
-        session.post = logged_post
+    finished = done_event.wait(timeout=timeout_sec)
 
-        findings = agent.run_full_scan(
-            *args, **kwargs
-        )
-
-        # Restore original methods
-        session.get = original_get
-        session.post = original_post
-
-        # Log each finding
-        if findings:
-            log.info(
-                f"Findings breakdown:"
-            )
-            for f in findings:
-                risk = f.get('risk', 'INFO')
-                ftype = f.get('type', 'Unknown')
-                url = f.get('url', '')
-                log.finding(
-                    risk, ftype,
-                    url[:50] if url else ''
-                )
-        else:
-            log.found("No vulnerabilities detected")
-
-        return findings if findings else []
-
-    except Exception as e:
-        log.error(f"Agent failed: {e}")
-        import traceback
-        traceback.print_exc()
+    if not finished:
+        # ✅ Timeout - don't wait, return empty
+        log.timeout(timeout_sec)
         return []
+
+    if error_holder[0]:
+        log.error(str(error_holder[0]))
+        return []
+
+    findings = result_holder[0] or []
+
+    if findings:
+        log.step(f"Findings: {len(findings)}")
+        for f in findings:
+            risk = f.get('risk', 'INFO')
+            ftype = f.get('type', 'Unknown')
+            desc = str(
+                f.get('description', '')
+            )[:60]
+            log.finding(risk, ftype, desc)
+            fix = f.get('fix', '')
+            if fix:
+                log.info(f"  Fix: {str(fix)[:80]}")
+    else:
+        log.ok("No vulnerabilities detected")
+
+    return findings
 
 
 # ════════════════════════════════════════════════════
@@ -950,598 +700,510 @@ class AdvancedScanOrchestrator:
         self.results = {}
         self.start_time = None
         self.end_time = None
+        self._write_log = None
         self.shared_session = None
+        self.session = None
+
+        # ── Per-agent timeouts ────────────────────
+        self.TIMEOUTS = {
+            'authentication':      45,
+            'command_injection':   40,
+            'file_upload':         35,
+            'ssrf':                35,
+            'xxe':                 30,
+            'nosql_injection':     30,
+            'ssti':                30,
+            'csrf':                25,
+            'websocket':           25,
+            'http_host_header':    25,
+            'web_cache':           25,
+            'oauth':               30,
+            'prototype_pollution': 30,
+            'access_control':      35,
+        }
 
     def print_banner(self):
-        date_str = datetime.now().strftime(
-            '%Y-%m-%d %H:%M:%S'
-        )
         print(f"\n{Fore.MAGENTA}" + "═" * 62)
+        print("  AI ADVANCED SECURITY ASSESSMENT")
         print(
-            "  AI ADVANCED SECURITY ASSESSMENT AGENT"
-        )
-        print(
-            "  Category 3 — Detailed Live Scanning"
+            "  Category 3 — Smart Parallel"
+            " Scan (No Consent)"
         )
         print("═" * 62)
-        print(f"  Target   : {self.target[:42]}")
-        print(f"  Date     : {date_str}")
+        print(f"  Target  : {self.target[:42]}")
         print(
-            "  Mode     : ADVANCED + LIVE LOGGING"
+            f"  Date    : "
+            f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
-        print(
-            "  Agents   : 14 Specialized Agents"
-        )
-        print(
-            "  Logging  : Every request logged"
-        )
+        print("  Mode    : ADVANCED PARALLEL DIRECT")
+        print("  Agents  : 14 (Smart Grouping)")
         print("═" * 62 + Style.RESET_ALL)
 
     def _get_consent(self):
-        print(f"\n{Fore.RED}" + "═" * 62)
-        print("  LEGAL WARNING")
-        print("═" * 62)
-        print(
-            "  Advanced scanning requires"
-        )
-        print(
-            "  WRITTEN AUTHORIZATION."
-        )
-        print("═" * 62 + Style.RESET_ALL)
-
-        print(
-            f"\n{Fore.YELLOW}Target: "
-            f"{Fore.CYAN}{self.target}"
-            + Style.RESET_ALL
-        )
-
-        try:
-            resp = input(
-                f"\n{Fore.YELLOW}Do you have written "
-                f"authorization? (yes/no): "
-                + Style.RESET_ALL
-            ).strip().lower()
-        except (KeyboardInterrupt, EOFError):
-            print(
-                f"\n{Fore.RED}[!] Cancelled."
-                + Style.RESET_ALL
-            )
-            return False
-
-        if resp != 'yes':
-            print(
-                f"{Fore.RED}[!] Consent not given."
-                + Style.RESET_ALL
-            )
-            return False
-
-        print(
-            f"\n{Fore.GREEN}[✓] Consent confirmed."
-            + Style.RESET_ALL
-        )
         return True
 
-    def _print_scan_start(self):
-        """Print what's about to happen."""
-        print(
-            f"\n{Fore.CYAN}" + "═" * 62
-        )
-        print(
-            "  SCAN PLAN — 14 AGENTS"
-        )
+    def _print_scan_plan(self):
+        print(f"\n{Fore.CYAN}" + "═" * 62)
+        print("  SCAN PLAN — 14 AGENTS")
         print("═" * 62)
-
-        agents_plan = [
-            (1,  "Authentication",
-             "Default creds | Lockout | MFA"),
-            (2,  "Command Injection",
-             "Error-based | Time-based blind"),
-            (3,  "File Upload",
-             "Extension bypass | MIME bypass"),
-            (4,  "SSRF",
-             "Internal IPs | Cloud metadata"),
-            (5,  "XXE Injection",
-             "File read | SSRF via XML"),
-            (6,  "NoSQL Injection",
-             "JSON operators | Param injection"),
-            (7,  "SSTI",
-             "Jinja2 | Twig | Freemarker | ERB"),
-            (8,  "CSRF",
-             "Token check | SameSite cookie"),
-            (9,  "WebSocket",
-             "WS discovery | Encryption check"),
+        plan = [
+            (1, "Authentication",
+             "Default creds|Lockout|MFA",
+             "Sequential"),
+            (2, "Command Injection",
+             "Error|Time-blind",
+             "Sequential"),
+            (3, "File Upload",
+             "Ext bypass|MIME bypass",
+             "Parallel"),
+            (4, "SSRF",
+             "Internal|AWS metadata",
+             "Parallel"),
+            (5, "XXE",
+             "File read|SSRF via XML",
+             "Parallel"),
+            (6, "NoSQL Injection",
+             "JSON ops|Param inject",
+             "Parallel"),
+            (7, "SSTI",
+             "Jinja2|Twig|ERB",
+             "Parallel"),
+            (8, "CSRF",
+             "Token|SameSite",
+             "Parallel"),
+            (9, "WebSocket",
+             "Discovery|Encryption",
+             "Parallel"),
             (10, "HTTP Host Header",
-             "Injection | Reset poisoning"),
+             "Injection|Poisoning",
+             "Parallel"),
             (11, "Web Cache",
-             "Cache headers | Deception test"),
+             "Headers|Deception",
+             "Parallel"),
             (12, "OAuth",
-             "State param | Redirect URI"),
+             "State|Redirect URI",
+             "Parallel"),
             (13, "Prototype Pollution",
-             "Client-side | Server-side"),
+             "Client|Server",
+             "Parallel"),
             (14, "Access Control",
-             "Admin access | Method bypass | "
-             "Header bypass"),
+             "Admin|Method bypass",
+             "Parallel"),
         ]
-
-        for num, name, coverage in agents_plan:
+        for num, name, cov, mode in plan:
+            mc = (
+                Fore.YELLOW
+                if mode == "Sequential"
+                else Fore.GREEN
+            )
             print(
                 f"  {Fore.MAGENTA}[{num:02d}]"
-                f"{Fore.WHITE} {name:<25}"
-                f"{Fore.CYAN}{coverage}"
+                f"{Fore.WHITE} {name:<22}"
+                f"{Fore.CYAN}{cov:<28}"
+                f"{mc}{mode}"
                 + Style.RESET_ALL
             )
-
         print("═" * 62 + Style.RESET_ALL)
-        print(
-            f"\n{Fore.YELLOW}Starting scan in 2s..."
-            + Style.RESET_ALL
-        )
-        time.sleep(2)
 
     def _make_session(self):
+        """Create fresh direct session."""
         s = requests.Session()
         s.headers.update({
             'User-Agent': (
-                'SecurityAudit/1.0 '
-                '(Authorized Assessment)'
+                'SecurityAudit/1.0'
+                ' (Authorized Assessment)'
             )
         })
         return s
 
-    def run_assessment(self, skip_consent=False):
+    def _get_base_session(self):
+        """
+        Get base session for copying proxy settings.
+        """
+        return (
+            self.shared_session
+            or self.session
+            or None
+        )
+
+    def _agent_session(self):
+        """
+        Create fresh session per agent.
+        Copies proxy from shared if available.
+        """
+        return _make_agent_session(
+            self._get_base_session()
+        )
+
+    def run_assessment(self, skip_consent=True):
         self.print_banner()
-
-        if not skip_consent:
-            if not self._get_consent():
-                return None
-
-        self._print_scan_start()
-
+        self._print_scan_plan()
         self.start_time = datetime.now()
-        self.shared_session = self._make_session()
-        total = 14
 
-        # ════════════════════════════════════════════
-        #  AGENT 1: AUTHENTICATION
-        # ════════════════════════════════════════════
-        log = LiveLogger("AUTHENTICATION", 1, total)
-        log.header()
-        log.info("Checking for login forms...")
-        log.info("Will test: default creds, "
-                 "lockout policy, MFA indicators")
+        def _log(msg, level='INFO'):
+            if self._write_log:
+                try:
+                    self._write_log(msg, level)
+                except:
+                    pass
+
+        _log(
+            'Cat3: Group1 sequential'
+            ' (Auth + CmdInject)',
+            'AGENT'
+        )
+
+        # ════════════════════════════════════════
+        #  GROUP 1: Sequential
+        # ════════════════════════════════════════
+        print(
+            f"\n{Fore.CYAN}{'─'*62}"
+            f"\n  GROUP 1: Sequential"
+            f" (Auth + CmdInject)"
+            f"\n{'─'*62}"
+            + Style.RESET_ALL
+        )
+
+        # ── Agent 1: Authentication ───────────────
+        log1 = LiveLogger(
+            "AUTHENTICATION", 1, 14,
+            writer=self._write_log
+        )
+        log1.header()
+        _log(
+            'Cat3: [Authentication] starting',
+            'AGENT'
+        )
+        s1 = time.time()
         try:
+            # ✅ Fresh session per agent
+            sess1 = self._agent_session()
             self.results['authentication'] = (
                 run_auth_verbose(
-                    self.target_url,
-                    self.shared_session,
-                    log
+                    self.target_url, sess1, log1
                 )
             )
         except Exception as e:
-            log.error(str(e))
+            log1.error(str(e))
             self.results['authentication'] = []
-        log.done(len(
-            self.results['authentication']
-        ))
+            _log(
+                f'Cat3 [auth] error: {e}', 'ERROR'
+            )
+        d1 = round(time.time() - s1, 1)
+        c1 = len(self.results['authentication'])
+        log1.done(c1, d1)
+        _log(
+            f'Cat3 [authentication]:'
+            f' {c1} findings | {d1}s',
+            'WARN' if c1 > 0 else 'SUCCESS'
+        )
 
-        # ════════════════════════════════════════════
-        #  AGENT 2: COMMAND INJECTION
-        # ════════════════════════════════════════════
-        log = LiveLogger(
-            "COMMAND INJECTION", 2, total
+        # ── Agent 2: Command Injection ────────────
+        log2 = LiveLogger(
+            "COMMAND INJECTION", 2, 14,
+            writer=self._write_log
         )
-        log.header()
-        log.info(
-            "Testing OS command injection via "
-            "URL parameters"
+        log2.header()
+        _log(
+            'Cat3: [Command Injection] starting',
+            'AGENT'
         )
-        log.info(
-            "Payloads: ; ls | ls & ls ; whoami "
-            "sleep/ping time-based"
-        )
+        s2 = time.time()
         try:
+            sess2 = self._agent_session()
             self.results['command_injection'] = (
                 run_command_injection_verbose(
-                    self.target_url,
-                    self.shared_session,
-                    log
+                    self.target_url, sess2, log2
                 )
             )
         except Exception as e:
-            log.error(str(e))
+            log2.error(str(e))
             self.results['command_injection'] = []
-        log.done(len(
-            self.results['command_injection']
-        ))
-
-        # ════════════════════════════════════════════
-        #  AGENT 3: FILE UPLOAD
-        # ════════════════════════════════════════════
-        log = LiveLogger("FILE UPLOAD", 3, total)
-        log.header()
-        log.info(
-            "Discovering upload endpoints..."
-        )
-        log.info(
-            "Tests: .php .asp .jsp extensions, "
-            "MIME type bypass"
-        )
-        try:
-            self.results['file_upload'] = (
-                run_generic_agent_verbose(
-                    FileUploadAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
-                )
+            _log(
+                f'Cat3 [cmd_inject] error: {e}',
+                'ERROR'
             )
-        except Exception as e:
-            log.error(str(e))
-            self.results['file_upload'] = []
-        log.done(len(self.results['file_upload']))
+        d2 = round(time.time() - s2, 1)
+        c2 = len(self.results['command_injection'])
+        log2.done(c2, d2)
+        _log(
+            f'Cat3 [command_injection]:'
+            f' {c2} findings | {d2}s',
+            'WARN' if c2 > 0 else 'SUCCESS'
+        )
 
-        # ════════════════════════════════════════════
-        #  AGENT 4: SSRF
-        # ════════════════════════════════════════════
-        log = LiveLogger("SSRF", 4, total)
-        log.header()
-        log.info(
-            "Looking for SSRF-prone parameters..."
+        # ════════════════════════════════════════
+        #  GROUP 2: 12 Parallel Agents
+        # ════════════════════════════════════════
+        print(
+            f"\n{Fore.CYAN}{'─'*62}"
+            f"\n  GROUP 2: 12 Agents in Parallel"
+            f"\n{'─'*62}"
+            + Style.RESET_ALL
         )
-        log.info(
-            "Targets: 127.0.0.1, localhost, "
-            "169.254.169.254 (AWS metadata)"
+        _log(
+            'Cat3: Group2 - 12 parallel agents',
+            'AGENT'
         )
-        log.info(
-            "Params checked: url, uri, link, "
-            "src, dest, redirect, callback..."
-        )
-        try:
-            self.results['ssrf'] = (
-                run_generic_agent_verbose(
-                    SSRFAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
-                )
+
+        parallel_agents = [
+            (
+                'file_upload', FileUploadAgent,
+                'FILE UPLOAD', 3,
+                [
+                    "Scenario: Attacker uploads"
+                    " malicious file",
+                    "Tests: .php .asp .jsp | MIME",
+                    "Paths: /upload /file /attach",
+                ]
+            ),
+            (
+                'ssrf', SSRFAgent,
+                'SSRF', 4,
+                [
+                    "Scenario: Server fetches"
+                    " internal resources",
+                    "Tests: 127.0.0.1 | 169.254.x",
+                    "Params: url uri link src dest",
+                ]
+            ),
+            (
+                'xxe', XXEAgent,
+                'XXE INJECTION', 5,
+                [
+                    "Scenario: XML parser reads files",
+                    "Tests: file:///etc/passwd",
+                    "Endpoints: XML/SOAP APIs",
+                ]
+            ),
+            (
+                'nosql_injection', NoSQLAgent,
+                'NOSQL INJECTION', 6,
+                [
+                    "Scenario: MongoDB bypass",
+                    "Tests: {$gt:''} {$ne:null}",
+                    "Methods: JSON + URL params",
+                ]
+            ),
+            (
+                'ssti', SSTIAgent,
+                'SSTI', 7,
+                [
+                    "Scenario: Template injection",
+                    "Tests: {{7*7}} ${7*7}",
+                    "Engines: Jinja2 Twig ERB",
+                ]
+            ),
+            (
+                'csrf', CSRFAgent,
+                'CSRF', 8,
+                [
+                    "Scenario: Forged requests",
+                    "Tests: csrf_token | SameSite",
+                    "Pages: login register settings",
+                ]
+            ),
+            (
+                'websocket', WebSocketAgent,
+                'WEBSOCKET', 9,
+                [
+                    "Scenario: Unencrypted WS",
+                    "Tests: wss:// vs ws://",
+                    "Paths: /ws /websocket",
+                ]
+            ),
+            (
+                'http_host_header',
+                HTTPHostHeaderAgent,
+                'HTTP HOST HEADER', 10,
+                [
+                    "Scenario: Host header inject",
+                    "Tests: evil-attacker.com",
+                    "Checks: Reflection | Poison",
+                ]
+            ),
+            (
+                'web_cache', WebCacheAgent,
+                'WEB CACHE', 11,
+                [
+                    "Scenario: Cache poisoning",
+                    "Tests: Cache-Control | Vary",
+                    "Deception: /profile.css tricks",
+                ]
+            ),
+            (
+                'oauth', OAuthAgent,
+                'OAUTH', 12,
+                [
+                    "Scenario: OAuth flow issues",
+                    "Tests: state | redirect_uri",
+                    "Paths: /oauth /authorize",
+                ]
+            ),
+            (
+                'prototype_pollution',
+                PrototypePollutionAgent,
+                'PROTOTYPE POLLUTION', 13,
+                [
+                    "Scenario: __proto__ pollution",
+                    "Tests: Client JS | Server JSON",
+                    "Patterns: __proto__",
+                ]
+            ),
+            (
+                'access_control', AccessControlAgent,
+                'ACCESS CONTROL', 14,
+                [
+                    "Scenario: Unauthorized access",
+                    "Tests: /admin /superadmin",
+                    "Bypass: Method | X-Original-URL",
+                ]
+            ),
+        ]
+
+        completed = [0]
+        p_lock = threading.Lock()
+
+        def run_parallel(agent_info):
+            (
+                key, agent_class,
+                label, num, info
+            ) = agent_info
+
+            log = LiveLogger(
+                label, num, 14,
+                writer=self._write_log
             )
-        except Exception as e:
-            log.error(str(e))
-            self.results['ssrf'] = []
-        log.done(len(self.results['ssrf']))
+            log.header()
+            for line in info:
+                log.info(line)
 
-        # ════════════════════════════════════════════
-        #  AGENT 5: XXE
-        # ════════════════════════════════════════════
-        log = LiveLogger("XXE INJECTION", 5, total)
-        log.header()
-        log.info(
-            "Searching for XML/SOAP endpoints..."
-        )
-        log.info(
-            "Payloads: file:///etc/passwd, "
-            "SSRF via entity, blind XXE"
-        )
-        try:
-            self.results['xxe'] = (
-                run_generic_agent_verbose(
-                    XXEAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
-                )
+            # ✅ FIX: Fresh session per parallel agent
+            agent_sess = self._agent_session()
+
+            _log(
+                f'Cat3: [{label}] starting', 'AGENT'
             )
-        except Exception as e:
-            log.error(str(e))
-            self.results['xxe'] = []
-        log.done(len(self.results['xxe']))
+            s = time.time()
 
-        # ════════════════════════════════════════════
-        #  AGENT 6: NoSQL INJECTION
-        # ════════════════════════════════════════════
-        log = LiveLogger("NOSQL INJECTION", 6, total)
-        log.header()
-        log.info(
-            "Testing MongoDB operator injection..."
-        )
-        log.info(
-            "Payloads: {$gt:''} {$ne:null} "
-            "{$regex:.*} [$ne]=1 [$gt]=0"
-        )
-        log.info(
-            "Methods: JSON body + URL params"
-        )
-        try:
-            self.results['nosql_injection'] = (
-                run_generic_agent_verbose(
-                    NoSQLAgent,
+            timeout = self.TIMEOUTS.get(key, 30)
+
+            try:
+                findings = run_agent_verbose(
+                    agent_class,
                     self.target_url,
-                    self.shared_session,
-                    log
+                    agent_sess,
+                    log,
+                    timeout_sec=timeout
                 )
-            )
-        except Exception as e:
-            log.error(str(e))
-            self.results['nosql_injection'] = []
-        log.done(len(
-            self.results['nosql_injection']
-        ))
-
-        # ════════════════════════════════════════════
-        #  AGENT 7: SSTI
-        # ════════════════════════════════════════════
-        log = LiveLogger("SSTI", 7, total)
-        log.header()
-        log.info(
-            "Testing Server-Side Template Injection..."
-        )
-        log.info(
-            "Engines: Jinja2 {{7*7}}, "
-            "Twig {{7*7}}, Freemarker ${7*7}, "
-            "ERB <%=7*7%>"
-        )
-        log.info(
-            "Detection: math expression evaluation "
-            "(expects output: 49)"
-        )
-        try:
-            self.results['ssti'] = (
-                run_generic_agent_verbose(
-                    SSTIAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
+                dur = round(time.time() - s, 1)
+                log.done(len(findings), dur)
+                count = len(findings)
+                _log(
+                    f'Cat3 [{key}]:'
+                    f' {count} findings | {dur}s',
+                    'WARN' if count > 0 else 'SUCCESS'
                 )
-            )
-        except Exception as e:
-            log.error(str(e))
-            self.results['ssti'] = []
-        log.done(len(self.results['ssti']))
+                with p_lock:
+                    completed[0] += 1
+                    _log(
+                        f'Cat3 progress:'
+                        f' {completed[0]}/12 done',
+                        'AGENT'
+                    )
+                return key, findings
 
-        # ════════════════════════════════════════════
-        #  AGENT 8: CSRF
-        # ════════════════════════════════════════════
-        log = LiveLogger("CSRF", 8, total)
-        log.header()
-        log.info(
-            "Analyzing forms for CSRF protection..."
-        )
-        log.info(
-            "Checks: csrf_token, _token, "
-            "authenticity_token, "
-            "csrfmiddlewaretoken"
-        )
-        log.info(
-            "Pages: login, register, profile, "
-            "settings, account"
-        )
-        try:
-            self.results['csrf'] = (
-                run_generic_agent_verbose(
-                    CSRFAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
+            except Exception as e:
+                dur = round(time.time() - s, 1)
+                log.error(f"Crashed: {e}")
+                _log(
+                    f'Cat3 [{key}] error: {e}',
+                    'ERROR'
                 )
-            )
-        except Exception as e:
-            log.error(str(e))
-            self.results['csrf'] = []
-        log.done(len(self.results['csrf']))
+                return key, []
 
-        # ════════════════════════════════════════════
-        #  AGENT 9: WEBSOCKET
-        # ════════════════════════════════════════════
-        log = LiveLogger("WEBSOCKET", 9, total)
-        log.header()
-        log.info(
-            "Scanning for WebSocket endpoints..."
+        # ── Launch parallel workers ───────────────
+        max_w = min(12, len(parallel_agents))
+        print(
+            f"\n{Fore.MAGENTA}  [*] Launching"
+            f" {len(parallel_agents)} agents"
+            f" ({max_w} workers)..."
+            + Style.RESET_ALL
         )
-        log.info(
-            "Paths: /ws /websocket /socket.io "
-            "/realtime /live /stream"
-        )
-        log.info(
-            "Checks: wss:// vs ws://, "
-            "auth on connection"
-        )
-        try:
-            self.results['websocket'] = (
-                run_generic_agent_verbose(
-                    WebSocketAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max_w
+        ) as executor:
+            futures = {
+                executor.submit(
+                    run_parallel, info
+                ): info[0]
+                for info in parallel_agents
+            }
+
+            for fut in (
+                concurrent.futures.as_completed(
+                    futures
                 )
-            )
-        except Exception as e:
-            log.error(str(e))
-            self.results['websocket'] = []
-        log.done(len(self.results['websocket']))
+            ):
+                key = futures[fut]
+                try:
+                    # ✅ FIX: Outer timeout = max
+                    # agent timeout + buffer
+                    rkey, findings = fut.result(
+                        timeout=90
+                    )
+                    self.results[rkey] = findings
+                    count = len(findings)
+                    col = (
+                        Fore.RED
+                        if count > 0
+                        else Fore.GREEN
+                    )
+                    print(
+                        f"  {col}[✓] {rkey}:"
+                        f" {count} findings"
+                        + Style.RESET_ALL
+                    )
 
-        # ════════════════════════════════════════════
-        #  AGENT 10: HTTP HOST HEADER
-        # ════════════════════════════════════════════
-        log = LiveLogger(
-            "HTTP HOST HEADER", 10, total
-        )
-        log.header()
-        log.info(
-            "Injecting malicious Host headers..."
-        )
-        log.info(
-            "Evil hosts: evil-attacker.com, "
-            "attacker.com"
-        )
-        log.info(
-            "Checking: reflection in response, "
-            "password reset poisoning"
-        )
-        try:
-            self.results['http_host_header'] = (
-                run_generic_agent_verbose(
-                    HTTPHostHeaderAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
-                )
-            )
-        except Exception as e:
-            log.error(str(e))
-            self.results['http_host_header'] = []
-        log.done(len(
-            self.results['http_host_header']
-        ))
+                except (
+                    concurrent.futures.TimeoutError
+                ):
+                    # ✅ FIX: Timeout - skip, continue
+                    self.results[key] = []
+                    print(
+                        f"  {Fore.YELLOW}[!] {key}:"
+                        f" TIMEOUT - skipped"
+                        + Style.RESET_ALL
+                    )
+                    _log(
+                        f'Cat3 [{key}] TIMEOUT',
+                        'WARN'
+                    )
 
-        # ════════════════════════════════════════════
-        #  AGENT 11: WEB CACHE
-        # ════════════════════════════════════════════
-        log = LiveLogger("WEB CACHE", 11, total)
-        log.header()
-        log.info(
-            "Analyzing cache configuration..."
-        )
-        log.info(
-            "Checks: Cache-Control, Vary header, "
-            "sensitive pages caching"
-        )
-        log.info(
-            "Cache deception: appending "
-            ".css .js .jpg to sensitive paths"
-        )
-        try:
-            self.results['web_cache'] = (
-                run_generic_agent_verbose(
-                    WebCacheAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
-                )
-            )
-        except Exception as e:
-            log.error(str(e))
-            self.results['web_cache'] = []
-        log.done(len(self.results['web_cache']))
+                except Exception as e:
+                    self.results[key] = []
+                    print(
+                        f"  {Fore.RED}[!] {key}:"
+                        f" Error - {e}"
+                        + Style.RESET_ALL
+                    )
+                    _log(
+                        f'Cat3 [{key}] failed: {e}',
+                        'ERROR'
+                    )
 
-        # ════════════════════════════════════════════
-        #  AGENT 12: OAUTH
-        # ════════════════════════════════════════════
-        log = LiveLogger("OAUTH", 12, total)
-        log.header()
-        log.info(
-            "Discovering OAuth endpoints..."
-        )
-        log.info(
-            "Paths: /oauth /oauth2 /authorize "
-            "/connect /.well-known/openid-configuration"
-        )
-        log.info(
-            "Checks: state parameter, "
-            "redirect_uri validation"
-        )
-        try:
-            self.results['oauth'] = (
-                run_generic_agent_verbose(
-                    OAuthAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
-                )
-            )
-        except Exception as e:
-            log.error(str(e))
-            self.results['oauth'] = []
-        log.done(len(self.results['oauth']))
-
-        # ════════════════════════════════════════════
-        #  AGENT 13: PROTOTYPE POLLUTION
-        # ════════════════════════════════════════════
-        log = LiveLogger(
-            "PROTOTYPE POLLUTION", 13, total
-        )
-        log.header()
-        log.info(
-            "Scanning JS source for "
-            "dangerous patterns..."
-        )
-        log.info(
-            "Patterns: __proto__, "
-            "constructor.prototype, "
-            "Object.prototype, lodash.merge"
-        )
-        log.info(
-            "Server-side: testing __proto__ "
-            "in JSON body"
-        )
-        try:
-            self.results['prototype_pollution'] = (
-                run_generic_agent_verbose(
-                    PrototypePollutionAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
-                )
-            )
-        except Exception as e:
-            log.error(str(e))
-            self.results['prototype_pollution'] = []
-        log.done(len(
-            self.results['prototype_pollution']
-        ))
-
-        # ════════════════════════════════════════════
-        #  AGENT 14: ACCESS CONTROL
-        # ════════════════════════════════════════════
-        log = LiveLogger(
-            "ACCESS CONTROL", 14, total
-        )
-        log.header()
-        log.info(
-            "Testing unauthorized access to "
-            "admin endpoints..."
-        )
-        log.info(
-            "Paths: /admin /administrator "
-            "/panel /superadmin /api/admin"
-        )
-        log.info(
-            "Bypass methods: HTTP method override, "
-            "header-based bypass"
-        )
-        log.info(
-            "Headers: X-Original-URL, "
-            "X-Forwarded-For, X-Real-IP"
-        )
-        try:
-            self.results['access_control'] = (
-                run_generic_agent_verbose(
-                    AccessControlAgent,
-                    self.target_url,
-                    self.shared_session,
-                    log
-                )
-            )
-        except Exception as e:
-            log.error(str(e))
-            self.results['access_control'] = []
-        log.done(len(
-            self.results['access_control']
-        ))
-
-        # ════════════════════════════════════════════
-        #  FINAL STATS
-        # ════════════════════════════════════════════
+        # ── Final Stats ──────────────────────────
         self.end_time = datetime.now()
         duration = (
             self.end_time - self.start_time
         ).seconds
 
-        total_findings = sum(
+        total_f = sum(
             len(v)
             for v in self.results.values()
             if isinstance(v, list)
         )
-
         critical = sum(
             1
             for v in self.results.values()
@@ -1564,25 +1226,48 @@ class AdvancedScanOrchestrator:
             if f.get('risk') == 'MEDIUM'
         )
 
-        print(
-            f"\n{Fore.GREEN}" + "═" * 62
+        _log(
+            f'Cat3 COMPLETE:'
+            f' {total_f} findings in {duration}s',
+            'SUCCESS'
         )
-        print("  CATEGORY 3 COMPLETE")
-        print("═" * 62)
-        print(f"  Target   : {self.target}")
-        print(f"  Duration : {duration}s")
-        print(f"  Total    : {total_findings} findings")
+
+        # Per-agent result summary
         print(
-            f"  {Fore.RED}Critical : {critical}"
+            f"\n{Fore.CYAN}  Agent Results:"
             + Style.RESET_ALL
         )
+        all_keys = [
+            'authentication', 'command_injection',
+            'file_upload', 'ssrf', 'xxe',
+            'nosql_injection', 'ssti', 'csrf',
+            'websocket', 'http_host_header',
+            'web_cache', 'oauth',
+            'prototype_pollution', 'access_control',
+        ]
+        for k in all_keys:
+            val = self.results.get(k, [])
+            count = (
+                len(val)
+                if isinstance(val, list) else 0
+            )
+            col = (
+                Fore.RED if count > 0
+                else Fore.GREEN
+            )
+            icon = '⚠' if count > 0 else '✓'
+            print(
+                f"  {col}{icon} {k}:"
+                f" {count} finding(s)"
+                + Style.RESET_ALL
+            )
+
+        print(f"\n{Fore.GREEN}" + "═" * 62)
         print(
-            f"  {Fore.YELLOW}High     : {high}"
-            + Style.RESET_ALL
-        )
-        print(
-            f"  {Fore.YELLOW}Medium   : {medium}"
-            + Style.RESET_ALL
+            f"  CATEGORY 3 COMPLETE"
+            f" - {duration}s"
+            f" - Total:{total_f}"
+            f" C:{critical} H:{high} M:{medium}"
         )
         print("═" * 62 + Style.RESET_ALL)
 
@@ -1597,15 +1282,16 @@ class AdvancedScanOrchestrator:
             return None
 
         print(
-            f"\n{Fore.CYAN}[*] Generating AI report..."
+            f"\n{Fore.CYAN}[*] Generating"
+            f" AI report..."
             + Style.RESET_ALL
         )
 
-        duration = 0
-        if self.start_time and self.end_time:
-            duration = (
-                self.end_time - self.start_time
-            ).seconds
+        duration = (
+            (self.end_time - self.start_time).seconds
+            if self.start_time and self.end_time
+            else 0
+        )
 
         generator = AdvancedReportGenerator(
             self.groq_key
@@ -1620,20 +1306,16 @@ class AdvancedScanOrchestrator:
         timestamp = datetime.now().strftime(
             '%Y%m%d_%H%M%S'
         )
-        target_clean = self.target.replace('.', '_')
         base = os.path.join(
             'output',
-            f"{target_clean}_{timestamp}"
+            f"{self.target.replace('.', '_')}"
+            f"_{timestamp}"
         )
 
         with open(
             f"{base}.md", 'w', encoding='utf-8'
         ) as f:
             f.write(report['markdown'])
-        print(
-            f"  {Fore.GREEN}[✓] Markdown: {base}.md"
-            + Style.RESET_ALL
-        )
 
         with open(
             f"{base}_raw.json", 'w', encoding='utf-8'
@@ -1642,24 +1324,14 @@ class AdvancedScanOrchestrator:
                 self.results, f,
                 indent=2, default=str
             )
-        print(
-            f"  {Fore.GREEN}[✓] JSON: "
-            f"{base}_raw.json"
-            + Style.RESET_ALL
-        )
 
         try:
             generator.generate_pdf(
-                report['markdown'],
-                f"{base}.pdf"
-            )
-            print(
-                f"  {Fore.GREEN}[✓] PDF: {base}.pdf"
-                + Style.RESET_ALL
+                report['markdown'], f"{base}.pdf"
             )
         except Exception as e:
             print(
-                f"  {Fore.YELLOW}[!] PDF failed: {e}"
+                f"  {Fore.YELLOW}[!] PDF: {e}"
                 + Style.RESET_ALL
             )
 
