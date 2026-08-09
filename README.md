@@ -16,6 +16,8 @@
 ██████╔╝███████╗╚██████╗ ██║ ██║╚██████╔╝███████╗██║ ╚████║ ██║
 ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝ ╚═╝ ╚═════╝ ╚══════╝╚═╝ ╚═══╝ ╚═╝
 
+text
+
 
 **25 Specialized Agents • 3 Scan Categories • AI Report Generation • Tor/Proxy Routing**
 
@@ -174,6 +176,8 @@
 ├── *_SUMMARY.md # Combined master report
 └── *_SUMMARY.pdf # Combined master PDF
 
+text
+
 
 ---
 
@@ -273,6 +277,7 @@ Bash
 
 python app.py
 Main Menu
+text
 
 ╔══════════════════════════════════════════════════════╗
 ║          🛡️  Security Assessment Agent v2.0          ║
@@ -292,6 +297,7 @@ Main Menu
 
   Connection: [D] Direct  [P] Proxy  [T] Tor  [A] Auto
 Scan Workflow
+text
 
   Enter Target URL
         │
@@ -334,6 +340,7 @@ Sensitive keyword analysis in domain
 📊 Live Monitor Dashboard
 Launches automatically in a new terminal window (QTerminal → xterm → gnome-terminal → fallback):
 
+text
 
 ┌─────────────────────────────────────────────────────────┐
 │  🛡️  Security Scanner — Live Monitor                     │
@@ -354,6 +361,7 @@ Format	Content
 .pdf	Professional PDF via ReportLab — ready to share
 *_SUMMARY.md	Master report merging all category findings
 Finding Structure
+JSON
 
 {
   "type": "SQL Injection",
@@ -408,6 +416,7 @@ ConnectionGuard.monitor()
     ├── Log event → monitor_logs.txt
     └── Resume scan transparently
 🤝 Contributing
+Bash
 
 # 1. Fork the repository
 # 2. Create your feature branch
@@ -437,6 +446,7 @@ This project is licensed under the MIT License — see LICENSE for details.
 👨‍💻 Author
 Built with ❤️ for the ethical hacking and bug bounty community.
 
+text
 
   Always get written permission before testing any target.
               H a c k   R e s p o n s i b l y 🛡️
