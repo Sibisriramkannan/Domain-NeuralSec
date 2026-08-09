@@ -1,36 +1,36 @@
-```markdown
 <div align="center">
 
 # 🛡️ Security Assessment Agent v2.0
 
 ### *AI-Powered Modular Penetration Testing Framework*
 
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Groq](https://img.shields.io/badge/Groq-Llama--3.3--70B-FF6B35?style=for-the-badge&logo=groq&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge\&logo=python\&logoColor=white)
+![Groq](https://img.shields.io/badge/Groq-Llama--3.3--70B-FF6B35?style=for-the-badge\&logo=groq\&logoColor=white)
 ![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-success?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge)
 
-```
+```text
  ██████╗███████╗ ██████╗    █████╗  ██████╗ ███████╗███╗   ██╗████████╗
 ██╔════╝██╔════╝██╔════╝   ██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
-╚█████╗ █████╗  ██║        ███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║   
- ╚═══██╗██╔══╝  ██║        ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║   
-██████╔╝███████╗╚██████╗   ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║   
-╚═════╝ ╚══════╝ ╚═════╝   ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝  
+╚█████╗ █████╗  ██║        ███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║
+ ╚═══██╗██╔══╝  ██║        ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║
+██████╔╝███████╗╚██████╗   ██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║
+╚═════╝ ╚══════╝ ╚═════╝   ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝
 ```
 
 **25 Specialized Agents • 3 Scan Categories • AI Report Generation • Tor/Proxy Routing**
 
-[Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Architecture](#-architecture) • [Reports](#-output-reports)
+[Features](#-features) • [Installation](#️-installation) • [Usage](#️-usage) • [Architecture](#️-architecture-deep-dive) • [Reports](#-output-reports)
 
 </div>
 
 ---
 
 > ⚠️ **LEGAL DISCLAIMER** — This tool is strictly for **authorized security testing and educational purposes only**.
-> Unauthorized use against systems you do not own or have **explicit written permission** to test is **illegal** and may
-> violate the CFAA, UK Computer Misuse Act, and equivalent laws worldwide.
+>
+> Unauthorized use against systems you do not own or have **explicit written permission** to test is **illegal** and may violate applicable computer misuse and cybersecurity laws.
+>
 > **The developers assume zero liability for misuse. Always hack responsibly.**
 
 ---
@@ -42,43 +42,49 @@
 <td width="50%">
 
 ### 🔍 Scanning Engine
-- **25 Specialized Security Agents** across 3 categories
-- **Parallel Execution** — Cat1: 4 | Cat2: 7 | Cat3: 14 agents
-- **Per-Agent Timeout** protection (no stuck scans)
-- **Fresh session per agent** for Cat3 stability
-- **Connection Guard** — WAF/403 auto-detection + rotate
+
+* **25 Specialized Security Agents** across 3 categories
+* **Parallel Execution** — Cat 1: 4 | Cat 2: 7 | Cat 3: 14 agents
+* **Per-Agent Timeout** protection
+* **Fresh session per agent** for Category 3 stability
+* **Connection Guard** — WAF/403 detection and connection rotation
 
 </td>
 <td width="50%">
 
 ### 🤖 AI & Reporting
-- **Groq Llama-3.3-70B** powered analysis
-- **Parallel Report Generation** (background threads)
-- **PDF + Markdown** auto-export via ReportLab
-- **Fallback Report Engine** (works without API)
-- **Combined Master Summary** across all categories
+
+* **Groq Llama-3.3-70B** powered analysis
+* **Parallel Report Generation**
+* **PDF + Markdown** auto-export via ReportLab
+* **Fallback Report Engine** when API generation is unavailable
+* **Combined Master Summary** across all scan categories
 
 </td>
 </tr>
+
 <tr>
 <td width="50%">
 
 ### 🌐 Smart Connection Routing
-- **Auto-Select** Direct / Free Proxy / Tor
-- **Tor Auto-Start** + IP rotation every 20s
-- **Free Proxy Scraper** with auto-rotation
-- **Anti-Tracking Engine** — UA randomization + jitter
-- **Risk-Based Routing** per target assessment
+
+* **Auto-Select** Direct / Free Proxy / Tor
+* **Tor Auto-Start**
+* **IP Rotation**
+* **Free Proxy Scraper** with automatic rotation
+* **Anti-Tracking Engine** — User-Agent randomization and timing jitter
+* **Risk-Based Routing** based on target assessment
 
 </td>
 <td width="50%">
 
 ### 📊 Live Dashboard
-- **Rich-powered** real-time terminal dashboard
-- **CPU / RAM / Network** live stats
-- **Live scan log** stream from `monitor_logs.txt`
-- **Cross-platform** terminal launcher
-- **QTerminal / xterm / gnome-terminal** auto-detect
+
+* **Rich-powered** real-time terminal dashboard
+* **CPU / RAM / Network** live statistics
+* Live scan log stream from `monitor_logs.txt`
+* **Cross-platform** terminal launcher
+* QTerminal / xterm / gnome-terminal auto-detection
 
 </td>
 </tr>
@@ -90,104 +96,118 @@
 
 ```text
 security-scanner-agent/
-├── app.py                          # Main entry — Menu, routing, scan, reports
-├── monitor.py                      # Rich live dashboard (CPU/RAM/Net/Logs)
-├── smart_connection.py             # Auto-select Direct/Proxy/Tor connection
-├── connection_guard.py             # WAF/firewall block detection + auto-rotate
-├── connection_manager.py           # Tor/VPN session management
-├── proxy_manager.py                # Free proxy scraper & rotator
-├── tor_manager.py                  # Tor auto-start + IP rotation display
-├── risk_checker.py                 # Target risk assessment (LOW/MEDIUM/HIGH)
-├── anti_track.py                   # Header obfuscation & timing jitter
-├── platform_utils.py               # Cross-platform terminal launcher
-├── setup.py                        # Auto-setup on first run
-├── patch_groq.py                   # Groq client patch utility
-├── .env                            # GROQ_API_KEY (never commit!)
-├── monitor_logs.txt                # Shared log (app writes → monitor reads)
 │
-├── tor_portable/                   # Portable Tor installation
+├── app.py                          # Main entry — menu, routing, scans, reports
+├── monitor.py                      # Rich live dashboard
+├── smart_connection.py            # Direct / Proxy / Tor selection
+├── connection_guard.py            # WAF/firewall detection
+├── connection_manager.py          # Connection session management
+├── proxy_manager.py               # Proxy management
+├── tor_manager.py                 # Tor management
+├── risk_checker.py                # Target risk assessment
+├── anti_track.py                  # Header randomization & timing jitter
+├── platform_utils.py              # Cross-platform utilities
+├── setup.py                       # First-run setup
+├── patch_groq.py                  # Groq client utility
+├── .env                           # GROQ_API_KEY — never commit
+├── monitor_logs.txt               # Shared application/monitor log
+│
+├── tor_portable/
 │   ├── torrc
 │   └── data/
 │
-├── category1/                      # ━━━ PASSIVE SCAN ━━━
+├── category1/                     # ━━━ PASSIVE SCAN ━━━
+│   │
 │   ├── core/
-│   │   ├── orchestrator.py         # Parallel agent runner (4 agents)
-│   │   ├── report_generator.py     # Groq AI report → MD + PDF
-│   │   └── groq_client.py          # Category-scoped Groq client
-│   ├── agents/
-│   │   ├── recon_agent.py          # DNS, WHOIS, subdomain enum
-│   │   ├── headers_agent.py        # HTTP security headers analysis
-│   │   ├── ssl_agent.py            # SSL/TLS certificate & cipher audit
-│   │   └── email_security_agent.py # SPF, DKIM, DMARC checks
-│   ├── main.py
-│   └── output/                     # Category-specific reports
-│
-├── category2/                      # ━━━ ACTIVE SCAN ━━━
-│   ├── core/
-│   │   ├── orchestrator.py         # Parallel agent runner (7 agents)
-│   │   ├── report_generator.py     # Groq AI report → MD + PDF
+│   │   ├── orchestrator.py
+│   │   ├── report_generator.py
 │   │   └── groq_client.py
+│   │
 │   ├── agents/
-│   │   ├── sqli_agent.py           # SQL Injection (Blind/Error/Time-based)
-│   │   ├── xss_agent.py            # XSS (Reflected/Stored/DOM)
-│   │   ├── path_traversal_agent.py # Directory traversal attacks
-│   │   ├── cors_agent.py           # CORS misconfiguration testing
-│   │   ├── graphql_agent.py        # GraphQL introspection & injection
-│   │   ├── jwt_agent.py            # JWT algorithm confusion & bypass
-│   │   └── api_agent.py            # REST API endpoint enumeration
+│   │   ├── recon_agent.py
+│   │   ├── headers_agent.py
+│   │   ├── ssl_agent.py
+│   │   └── email_security_agent.py
+│   │
+│   ├── main.py
+│   └── output/
+│
+├── category2/                     # ━━━ ACTIVE SCAN ━━━
+│   │
+│   ├── core/
+│   │   ├── orchestrator.py
+│   │   ├── report_generator.py
+│   │   └── groq_client.py
+│   │
+│   ├── agents/
+│   │   ├── sqli_agent.py
+│   │   ├── xss_agent.py
+│   │   ├── path_traversal_agent.py
+│   │   ├── cors_agent.py
+│   │   ├── graphql_agent.py
+│   │   ├── jwt_agent.py
+│   │   └── api_agent.py
+│   │
 │   ├── payloads/
 │   │   ├── sqli_payloads.txt
 │   │   ├── xss_payloads.txt
 │   │   └── path_traversal_payloads.txt
+│   │
 │   ├── main.py
 │   └── output/
 │
-├── category3/                      # ━━━ ADVANCED SCAN ━━━
+├── category3/                     # ━━━ ADVANCED SCAN ━━━
+│   │
 │   ├── core/
-│   │   ├── orchestrator.py         # 2 seq + 12 parallel agents + LiveLogger
-│   │   ├── report_generator.py     # Groq AI report → MD + PDF
+│   │   ├── orchestrator.py
+│   │   ├── report_generator.py
 │   │   └── groq_client.py
+│   │
 │   ├── agents/
-│   │   ├── auth_agent.py           # Auth bypass & broken authentication
-│   │   ├── command_injection_agent.py  # OS command injection
-│   │   ├── file_upload_agent.py    # Malicious file upload vectors
-│   │   ├── ssrf_agent.py           # Server-Side Request Forgery
-│   │   ├── xxe_agent.py            # XML External Entity injection
-│   │   ├── nosql_agent.py          # NoSQL injection (MongoDB etc.)
-│   │   ├── ssti_agent.py           # Server-Side Template Injection
-│   │   ├── csrf_agent.py           # Cross-Site Request Forgery
-│   │   ├── websocket_agent.py      # WebSocket security testing
-│   │   ├── http_host_header_agent.py  # Host header injection
-│   │   ├── web_cache_agent.py      # Web cache poisoning
-│   │   ├── oauth_agent.py          # OAuth 2.0 flow vulnerabilities
-│   │   ├── prototype_pollution_agent.py # JS prototype pollution
-│   │   └── access_control_agent.py # Broken access control / IDOR
+│   │   ├── auth_agent.py
+│   │   ├── command_injection_agent.py
+│   │   ├── file_upload_agent.py
+│   │   ├── ssrf_agent.py
+│   │   ├── xxe_agent.py
+│   │   ├── nosql_agent.py
+│   │   ├── ssti_agent.py
+│   │   ├── csrf_agent.py
+│   │   ├── websocket_agent.py
+│   │   ├── http_host_header_agent.py
+│   │   ├── web_cache_agent.py
+│   │   ├── oauth_agent.py
+│   │   ├── prototype_pollution_agent.py
+│   │   └── access_control_agent.py
+│   │
 │   ├── payloads/
 │   │   ├── command_injection_payloads.txt
 │   │   ├── xxe_payloads.txt
 │   │   ├── nosql_payloads.txt
 │   │   ├── ssti_payloads.txt
 │   │   └── file_upload_extensions.txt
+│   │
 │   ├── main.py
 │   └── output/
 │
 └── output/                         # ━━━ MASTER OUTPUT ━━━
-    ├── category1/                  # Copied Cat1 reports
-    ├── category2/                  # Copied Cat2 reports
-    ├── category3/                  # Copied Cat3 reports
-    ├── *_SUMMARY.md                # Combined master report
-    └── *_SUMMARY.pdf               # Combined master PDF
+    ├── category1/
+    ├── category2/
+    ├── category3/
+    ├── *_SUMMARY.md
+    └── *_SUMMARY.pdf
 ```
 
 ---
 
 ## 🔬 Scan Categories
 
-| Category | Type | Agents | Execution | Checks |
-|----------|------|--------|-----------|--------|
-| 🟢 **Cat 1** | Passive | 4 | 4 Parallel | DNS, WHOIS, Headers, SSL/TLS, SPF/DKIM/DMARC |
-| 🟡 **Cat 2** | Active | 7 | 7 Parallel | SQLi, XSS, Path Traversal, CORS, GraphQL, JWT, API |
-| 🔴 **Cat 3** | Advanced | 14 | 2 Seq + 12 Parallel | Auth, CMDi, FileUpload, SSRF, XXE, NoSQL, SSTI, CSRF, WebSocket, HostHeader, Cache, OAuth, Proto, IDOR |
+| Category     | Type     | Agents | Execution                  | Checks                                                                                                                 |
+| ------------ | -------- | -----: | -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 🟢 **Cat 1** | Passive  |      4 | 4 Parallel                 | DNS, WHOIS, Headers, SSL/TLS, SPF/DKIM/DMARC                                                                           |
+| 🟡 **Cat 2** | Active   |      7 | 7 Parallel                 | SQLi, XSS, Path Traversal, CORS, GraphQL, JWT, API                                                                     |
+| 🔴 **Cat 3** | Advanced |     14 | 2 Sequential + 12 Parallel | Auth, CMDi, File Upload, SSRF, XXE, NoSQL, SSTI, CSRF, WebSocket, Host Header, Cache, OAuth, Prototype Pollution, IDOR |
+
+**Total: 25 specialized security agents**
 
 ---
 
@@ -195,36 +215,94 @@ security-scanner-agent/
 
 ### Prerequisites
 
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| Python | 3.10+ | Required |
-| Groq API Key | — | [Get free key](https://console.groq.com) |
-| Tor | Optional | Auto-started for HIGH risk targets |
+| Requirement  | Version  | Notes                             |
+| ------------ | -------- | --------------------------------- |
+| Python       | 3.10+    | Required                          |
+| Groq API Key | —        | Required for AI report generation |
+| Tor          | Optional | Used when Tor routing is selected |
 
 ### Quick Setup
+
+Clone the repository:
 
 ```bash
 git clone https://github.com/yourusername/security-assessment-agent-v2.git
 cd security-assessment-agent-v2
-python -m venv venv
-source venv/bin/activate        # Linux/macOS
-venv\Scripts\activate           # Windows
-pip install -r requirements.txt
-echo "GROQ_API_KEY=your_key_here" > .env
-python app.py
 ```
 
-> 💡 **First run auto-setup:** installs packages, creates directories, checks Tor availability.
+Create a virtual environment:
 
-### `.env` Configuration
+```bash
+python -m venv venv
+```
+
+### Linux / macOS
+
+```bash
+source venv/bin/activate
+```
+
+### Windows PowerShell
+
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+### Windows CMD
+
+```cmd
+venv\Scripts\activate.bat
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Create the `.env` file:
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
 ```
 
+Start the application:
+
+```bash
+python app.py
+```
+
+> 💡 **First Run:** The setup module can initialize required directories, dependencies, and connection-related components depending on the platform.
+
+---
+
+## 🔐 Environment Configuration
+
+Store sensitive configuration in `.env`:
+
+```env
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+### Important
+
+Never commit `.env` to GitHub.
+
+Add it to `.gitignore`:
+
+```gitignore
+.env
+venv/
+__pycache__/
+*.pyc
+monitor_logs.txt
+```
+
 ---
 
 ## 📦 Dependencies
+
+Core Python packages:
 
 ```text
 groq>=0.4.0
@@ -241,6 +319,12 @@ psutil>=5.9.0
 websocket-client>=1.6.0
 ```
 
+Install them using:
+
+```bash
+pip install -r requirements.txt
+```
+
 ---
 
 ## 🖥️ Usage
@@ -253,9 +337,9 @@ python app.py
 
 ### Main Menu
 
-```
+```text
 ╔══════════════════════════════════════════════════════╗
-║          🛡️  Security Assessment Agent v2.0          ║
+║          🛡️ Security Assessment Agent v2.0           ║
 ╠══════════════════════════════════════════════════════╣
 ║                                                      ║
 ║   [1]  Category 1 — Passive Scan                     ║
@@ -270,104 +354,170 @@ python app.py
 ║   [0]  Exit                                          ║
 ╚══════════════════════════════════════════════════════╝
 
-Connection: [D] Direct  [P] Proxy  [T] Tor  [A] Auto
+Connection:
+[D] Direct
+[P] Proxy
+[T] Tor
+[A] Auto
 ```
 
-### Scan Workflow
+---
 
-```
-  Enter Target URL
-        │
-        ▼
-  ⚖️  Risk Assessment (LOW / MEDIUM / HIGH)
-        │
-        ▼
-  🌐 Smart Connection Setup (Direct / Proxy / Tor)
-        │
-        ▼
-  🕵️  Anti-Track Engine Activated
-        │
-        ▼
-  🔄 Connection Guard Started (WAF/403 monitoring)
-        │
-        ▼
-  🚀 Parallel Agent Execution
-        │
-        ├── 📊 Live Dashboard Updates
-        │
-        ▼
-  🤖 AI Report Generation (Groq — background thread)
-        │
-        ▼
-  📄 PDF + Markdown Export → output/
-        │
-        ▼
-  📋 Combined Master Summary Report
+## 🔄 Scan Workflow
+
+```text
+┌───────────────────────────────┐
+│       Enter Target URL        │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│       Risk Assessment         │
+│    LOW / MEDIUM / HIGH        │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│   Smart Connection Setup      │
+│   Direct / Proxy / Tor        │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│      Anti-Track Engine        │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│      Connection Guard         │
+│     WAF / 403 Monitoring      │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│   Parallel Agent Execution    │
+│   + Live Dashboard Updates    │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│     AI Report Generation      │
+│           Groq API            │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│    Markdown + PDF Export      │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│    Combined Master Summary    │
+└───────────────────────────────┘
 ```
 
 ---
 
 ## 🌐 Smart Connection Routing
 
-| Risk Level | Detection Criteria | Connection | Anti-Track |
-|------------|-------------------|------------|------------|
-| 🟢 **LOW** | Normal domains | Direct | None |
-| 🟡 **MEDIUM** | WAF/CDN detected | Free Proxy rotation | Basic header obfuscation |
-| 🔴 **HIGH** | `.gov` `.mil` `.bank` / Bug Bounty | Tor + IP rotate/20s | Full jitter + UA randomization |
+The framework supports multiple connection modes:
 
-**Risk factors evaluated:**
-- Target TLD (`.gov`, `.mil`, `.bank`, `.edu`)
-- WAF/CDN presence (Cloudflare, Akamai, Imperva, etc.)
-- Bug bounty program detection
-- Sensitive keyword analysis in domain
+| Mode       | Description                                                           |
+| ---------- | --------------------------------------------------------------------- |
+| **Direct** | Uses the normal system internet connection                            |
+| **Proxy**  | Routes supported HTTP traffic through configured proxy infrastructure |
+| **Tor**    | Routes supported traffic through a Tor session                        |
+| **Auto**   | Selects a connection strategy based on configured risk logic          |
+
+### Risk Assessment
+
+The risk checker can evaluate factors such as:
+
+* Target/domain characteristics
+* WAF/CDN presence
+* Configured domain patterns
+* Security-testing context
+* Target-specific routing rules
+
+> Connection routing is not a substitute for authorization. Only scan systems for which you have explicit permission.
 
 ---
 
 ## 📊 Live Monitor Dashboard
 
-Launches automatically in a new terminal window (QTerminal → xterm → gnome-terminal → fallback):
+The monitoring component displays runtime statistics and scan activity.
 
-```
+```text
 ┌─────────────────────────────────────────────────────────┐
-│  🛡️  Security Scanner — Live Monitor                    │
+│  🛡️ Security Scanner — Live Monitor                     │
 ├──────────────────┬──────────────────┬───────────────────┤
-│  CPU: ████░░ 42% │  RAM: ██████ 61% │  NET: ↑2.1 ↓8.4MB │
+│ CPU: ████░░ 42%  │ RAM: ██████ 61% │ NET: ↑2.1 ↓8.4MB │
 ├─────────────────────────────────────────────────────────┤
-│  [12:34:56]  🔍 ReconAgent         → Completed          │
-│  [12:34:58]  📋 HeadersAgent       → 3 findings         │
-│  [12:35:01]  🔒 SSLAgent           → Weak cipher found  │
-│  [12:35:03]  💉 SQLiAgent          → Testing payloads…  │
+│ [12:34:56] 🔍 ReconAgent       → Completed              │
+│ [12:34:58] 📋 HeadersAgent     → 3 findings             │
+│ [12:35:01] 🔒 SSLAgent         → Weak cipher found      │
+│ [12:35:03] 💉 SQLiAgent        → Testing...             │
 └─────────────────────────────────────────────────────────┘
 ```
 
-Shares `monitor_logs.txt` between app (writer) and monitor (reader).
+The application and monitor can exchange runtime events through:
+
+```text
+monitor_logs.txt
+```
 
 ---
 
 ## 📁 Output Reports
 
-All reports saved to `output/` (master) and `categoryX/output/` (per-category):
+Reports are stored in category-specific directories and the master `output/` directory.
 
-| Format | Content |
-|--------|---------|
-| `.md` | Full Markdown — findings, CVSS scores, CWE IDs, remediation |
-| `.json` | Raw structured findings — pipeline/integration ready |
-| `.pdf` | Professional PDF via ReportLab — ready to share |
-| `*_SUMMARY.md` | Master report merging all category findings |
+| Format          | Description                                   |
+| --------------- | --------------------------------------------- |
+| `.md`           | Markdown vulnerability assessment report      |
+| `.json`         | Structured findings for further processing    |
+| `.pdf`          | Shareable PDF report generated with ReportLab |
+| `*_SUMMARY.md`  | Combined summary across selected categories   |
+| `*_SUMMARY.pdf` | Combined PDF summary                          |
 
-### Finding Structure
+Example:
+
+```text
+output/
+├── category1/
+├── category2/
+├── category3/
+├── target_2026_SUMMARY.md
+└── target_2026_SUMMARY.pdf
+```
+
+---
+
+## 🔎 Finding Structure
+
+Individual findings follow a structured format:
 
 ```json
 {
   "type": "SQL Injection",
   "risk": "HIGH",
-  "description": "Blind SQLi detected on /login via 'username' parameter",
+  "description": "Potential SQL injection behavior identified during authorized testing.",
   "cvss_score": 9.8,
   "cwe": "CWE-89",
-  "evidence": "Response delay of 5.2s on payload: ' OR SLEEP(5)--",
-  "fix": "Use parameterized queries / prepared statements"
+  "evidence": "Relevant request/response behavior recorded by the scanner.",
+  "fix": "Use parameterized queries and prepared statements."
 }
 ```
+
+Typical information includes:
+
+* Vulnerability name
+* Severity
+* Description
+* CVSS score
+* CWE identifier
+* Evidence
+* Recommended remediation
 
 ---
 
@@ -375,83 +525,162 @@ All reports saved to `output/` (master) and `categoryX/output/` (per-category):
 
 ### Pre-Scan Setup Flow
 
-```python
+```text
 run_pre_scan_setup(target_url)
-    ├── RiskChecker.assess(target_url)           → risk_level
-    ├── AntiTrackManager.activate(risk_level)    → session headers modified
-    ├── SmartConnection.get_session(risk_level)  → shared_session
-    └── ConnectionGuard.start(session)           → WAF block monitor
+    │
+    ├── RiskChecker.assess(target_url)
+    │       └── risk_level
+    │
+    ├── AntiTrackManager.activate(risk_level)
+    │       └── session configuration
+    │
+    ├── SmartConnection.get_session(risk_level)
+    │       └── shared_session
+    │
+    └── ConnectionGuard.start(session)
+            └── connection monitoring
 ```
+
+---
 
 ### Agent Execution Flow
 
-```python
+```text
 Orchestrator.run(target_url, session)
+    │
     ├── ThreadPoolExecutor(max_workers=N)
-    │   ├── Agent1.scan() → findings[]          ─┐
-    │   ├── Agent2.scan() → findings[]           ├─ Parallel
-    │   └── AgentN.scan() → findings[]          ─┘
+    │       │
+    │       ├── Agent1.scan() ──┐
+    │       ├── Agent2.scan() ──┼── Parallel Execution
+    │       └── AgentN.scan() ──┘
     │
     └── all_findings[]
-         │
-         ▼ (background thread — starts immediately after scan)
-    ReportGenerator.generate(all_findings)
-         ├── Groq API → AI-formatted Markdown
-         ├── Fallback → hardcoded template (if API fails)
-         └── ReportLab → PDF export
+            │
+            ▼
+      ReportGenerator
+            │
+            ├── AI-assisted formatting
+            ├── Fallback report generation
+            └── PDF generation
 ```
 
-### Path Isolation (Import Safety)
+---
+
+### Path Isolation
+
+The application can isolate category imports to prevent collisions between similarly named `core/` and `agents/` modules.
 
 ```python
-# app.py — prevents module collision between identical
-# core/ and agents/ folder names across categories
+_switch_to(category_path)
 
-_switch_to(category_path)   # Prepends category to sys.path
-    import orchestrator
-    import report_generator
-_restore_all()              # Restores original sys.path
+import orchestrator
+import report_generator
+
+_restore_all()
 ```
+
+---
 
 ### Connection Guard Flow
 
-```python
+```text
 ConnectionGuard.monitor()
-    ├── Detect 403 / 429 / WAF signatures
-    ├── Auto-rotate → next proxy or new Tor circuit
-    ├── Log event → monitor_logs.txt
-    └── Resume scan transparently
+    │
+    ├── Detect connection errors / configured block conditions
+    │
+    ├── Trigger supported connection recovery
+    │
+    ├── Log event
+    │       └── monitor_logs.txt
+    │
+    └── Continue scan when possible
 ```
 
 ---
 
 ## 🤝 Contributing
 
+Contributions are welcome for authorized security-testing and defensive research functionality.
+
+### 1. Fork the Repository
+
+Create a feature branch:
+
 ```bash
-# 1. Fork the repository
 git checkout -b feature/new-agent-name
-
-# 2. Follow agent interface
-findings = [{
-    "type"        : "Vulnerability Name",
-    "risk"        : "HIGH | MEDIUM | LOW | INFO",
-    "description" : "...",
-    "cvss_score"  : 0.0,
-    "cwe"         : "CWE-XXX",
-    "evidence"    : "...",
-    "fix"         : "..."
-}]
-
-# 3. Submit pull request with clear description
 ```
 
-**Agent categories:** Add to `categoryX/agents/`, update `core/orchestrator.py` agent list, add payload files to `categoryX/payloads/`.
+### 2. Follow the Agent Finding Structure
+
+```python
+findings = [
+    {
+        "type": "Vulnerability Name",
+        "risk": "HIGH | MEDIUM | LOW | INFO",
+        "description": "...",
+        "cvss_score": 0.0,
+        "cwe": "CWE-XXX",
+        "evidence": "...",
+        "fix": "..."
+    }
+]
+```
+
+### 3. Add the Agent
+
+Place the module inside the appropriate category:
+
+```text
+categoryX/agents/
+```
+
+Update:
+
+```text
+categoryX/core/orchestrator.py
+```
+
+Add required supporting files under:
+
+```text
+categoryX/payloads/
+```
+
+### 4. Submit a Pull Request
+
+Include:
+
+* Purpose of the new agent
+* Security check performed
+* Expected output
+* Testing performed
+* Dependencies added
+* Example findings when appropriate
+
+---
+
+## 🛡️ Responsible Use
+
+This framework is intended for:
+
+* Authorized penetration testing
+* Security labs
+* CTF environments
+* Bug bounty programs where testing is explicitly permitted
+* Internal security assessments
+* Security education and research
+
+Do **not** use this project against systems without authorization.
+
+Always review the applicable scope and rules of engagement before running active or advanced scans.
 
 ---
 
 ## 📜 License
 
-This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
+This project is licensed under the **MIT License**.
+
+See the `LICENSE` file for details.
 
 ---
 
@@ -459,14 +688,16 @@ This project is licensed under the **MIT License** — see [LICENSE](LICENSE) fo
 
 ## 👨‍💻 Author
 
-Built with ❤️ for the **ethical hacking** and **bug bounty** community.
+Built with ❤️ for the **ethical hacking**, **cybersecurity**, and **bug bounty** community.
 
-```
-  Always get written permission before testing any target.
-              H a c k   R e s p o n s i b l y  🛡️
+```text
+Always get written permission before testing any target.
+
+        H A C K   R E S P O N S I B L Y   🛡️
 ```
 
 ![Ethical](https://img.shields.io/badge/Ethical-Hackers%20Only-red?style=for-the-badge)
 
+### ⭐ If you find this project useful, consider starring the repository.
+
 </div>
-```
